@@ -14,12 +14,15 @@ handle_error() {
 # Create required directories with proper permissions
 echo "📁 Creating required directories..."
 mkdir -p /app/logs /app/media /app/staticfiles
-chmod 755 /app/logs /app/media /app/staticfiles
+
+# Try to set permissions, but don't fail if we can't (mounted volumes)
+echo "🔧 Setting permissions..."
+chmod 755 /app/logs /app/media /app/staticfiles 2>/dev/null || echo "⚠️  Could not change permissions (likely mounted volumes), continuing..."
 
 # Ensure proper ownership if running as root, then switch to app user
 if [ "$(id -u)" = "0" ]; then
     echo "👤 Setting proper ownership..."
-    chown -R app:app /app/logs /app/media /app/staticfiles 2>/dev/null || echo "⚠️  Could not change ownership, continuing..."
+    chown -R app:app /app/logs /app/media /app/staticfiles 2>/dev/null || echo "⚠️  Could not change ownership (likely mounted volumes), continuing..."
     
     # If we have su-exec, use it to switch to app user
     if command -v su-exec >/dev/null 2>&1; then
