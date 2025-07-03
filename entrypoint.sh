@@ -31,11 +31,30 @@ if [ "$(id -u)" = "0" ]; then
     fi
 fi
 
-# Test database connectivity
+# Test database connectivity using Django's database check
 echo "🔍 Checking database connectivity..."
 max_attempts=30
 attempt=1
-until python manage.py dbshell --command="\q" 2>/dev/null; do
+until python -c "
+import os
+import sys
+import django
+from django.conf import settings
+from django.core.management import execute_from_command_line
+from django.db import connection
+from django.core.management.base import CommandError
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'hris_platform.settings')
+django.setup()
+
+try:
+    connection.ensure_connection()
+    print('Database connection successful')
+    sys.exit(0)
+except Exception as e:
+    print(f'Database connection failed: {e}')
+    sys.exit(1)
+" 2>/dev/null; do
     if [ $attempt -eq $max_attempts ]; then
         echo "❌ Could not connect to database after $max_attempts attempts"
         exit 1

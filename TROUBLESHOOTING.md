@@ -6,6 +6,21 @@ This guide covers common issues encountered during D.A.N.I deployment and their 
 
 ## 🔧 Common Deployment Issues
 
+### 0. Database Connection Issues (Most Recent Fix)
+
+**Problem:**
+```
+⏳ Waiting for database... (attempt 1/30)
+```
+The web container keeps trying to connect to the database but fails every time.
+
+**Solution:**
+Updated the entrypoint script to use a more robust database connectivity test. The issue was that `python manage.py dbshell` requires PostgreSQL client tools that might not be available in the container.
+
+**Fixed in:** `entrypoint.sh` lines 34-66 - Now uses Django's `connection.ensure_connection()` for testing.
+
+---
+
 ### 1. Docker Permission Denied
 
 **Problem:**
