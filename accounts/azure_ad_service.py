@@ -158,7 +158,7 @@ class AzureADService:
         # Generate temporary password
         temp_password = self._generate_secure_password(azure_settings.default_password_length)
         
-        # Prepare user data for Azure AD
+        # Prepare user data for Azure AD with proper validation
         azure_user_data = {
             "accountEnabled": user.is_active,
             "displayName": user.get_full_name(),
@@ -166,13 +166,27 @@ class AzureADService:
             "userPrincipalName": user.email,
             "givenName": user.first_name,
             "surname": user.last_name,
-            "jobTitle": user.job_title or "",
-            "department": user.department or "",
             "passwordProfile": {
                 "forceChangePasswordNextSignIn": True,
                 "password": temp_password
             }
         }
+        
+        # Add job title if present and valid (1-128 characters)
+        if user.job_title and len(user.job_title.strip()) > 0:
+            job_title = user.job_title.strip()
+            if len(job_title) <= 128:
+                azure_user_data["jobTitle"] = job_title
+            else:
+                azure_user_data["jobTitle"] = job_title[:128]  # Truncate to 128 chars
+        
+        # Add department if present and valid
+        if user.department and len(user.department.strip()) > 0:
+            department = user.department.strip()
+            if len(department) <= 64:  # Department field limit in Azure AD
+                azure_user_data["department"] = department
+            else:
+                azure_user_data["department"] = department[:64]  # Truncate to 64 chars
         
         # Add phone number if available
         if user.phone_number:
@@ -185,6 +199,7 @@ class AzureADService:
             user.azure_ad_object_id = result.get("id")
             user.azure_ad_sync_status = "synced"
             user.azure_ad_last_sync = django_timezone.now()
+            user.azure_ad_sync_error = ""  # Clear any previous errors
             user.save()
             
             logger.info(f"Successfully created Azure AD user for {user.email}")
@@ -194,8 +209,10 @@ class AzureADService:
                 "message": "User created successfully in Azure AD"
             }
         else:
-            # Update sync status to failed
+            # Update sync status to failed with error details
             user.azure_ad_sync_status = "failed"
+            error_message = f"{result.get('error', 'Unknown error')}: {result.get('details', 'No details available')}"
+            user.azure_ad_sync_error = error_message
             user.save()
             
             logger.error(f"Failed to create Azure AD user for {user.email}: {result}")
@@ -205,21 +222,40 @@ class AzureADService:
         """
         Update a user in Azure AD.
         """
-        if not settings.AZURE_AD_ENABLED or not settings.AZURE_AD_SYNC_ENABLED:
+        azure_settings = self._get_settings()
+        
+        if not azure_settings.is_configured:
+            return False, {"error": "Azure AD is not configured"}
+            
+        if not azure_settings.enabled or not azure_settings.sync_enabled:
             return False, {"error": "Azure AD sync is disabled"}
         
         if not user.azure_ad_object_id:
             return False, {"error": "User does not exist in Azure AD"}
         
-        # Prepare update data
+        # Prepare update data with proper validation
         update_data = {
             "accountEnabled": user.is_active,
             "displayName": user.get_full_name(),
             "givenName": user.first_name,
             "surname": user.last_name,
-            "jobTitle": user.job_title or "",
-            "department": user.department or "",
         }
+        
+        # Add job title if present and valid (1-128 characters)
+        if user.job_title and len(user.job_title.strip()) > 0:
+            job_title = user.job_title.strip()
+            if len(job_title) <= 128:
+                update_data["jobTitle"] = job_title
+            else:
+                update_data["jobTitle"] = job_title[:128]  # Truncate to 128 chars
+        
+        # Add department if present and valid
+        if user.department and len(user.department.strip()) > 0:
+            department = user.department.strip()
+            if len(department) <= 64:  # Department field limit in Azure AD
+                update_data["department"] = department
+            else:
+                update_data["department"] = department[:64]  # Truncate to 64 chars
         
         # Add phone number if available
         if user.phone_number:
@@ -236,12 +272,15 @@ class AzureADService:
         if success:
             user.azure_ad_sync_status = "synced"
             user.azure_ad_last_sync = django_timezone.now()
+            user.azure_ad_sync_error = ""  # Clear any previous errors
             user.save()
             
             logger.info(f"Successfully updated Azure AD user for {user.email}")
             return True, {"message": "User updated successfully in Azure AD"}
         else:
             user.azure_ad_sync_status = "failed"
+            error_message = f"{result.get('error', 'Unknown error')}: {result.get('details', 'No details available')}"
+            user.azure_ad_sync_error = error_message
             user.save()
             
             logger.error(f"Failed to update Azure AD user for {user.email}: {result}")
@@ -251,7 +290,12 @@ class AzureADService:
         """
         Disable a user in Azure AD.
         """
-        if not settings.AZURE_AD_ENABLED or not settings.AZURE_AD_SYNC_ENABLED:
+        azure_settings = self._get_settings()
+        
+        if not azure_settings.is_configured:
+            return False, {"error": "Azure AD is not configured"}
+            
+        if not azure_settings.enabled or not azure_settings.sync_enabled:
             return False, {"error": "Azure AD sync is disabled"}
         
         if not user.azure_ad_object_id:
@@ -281,7 +325,12 @@ class AzureADService:
         """
         Delete a user from Azure AD (hard delete).
         """
-        if not settings.AZURE_AD_ENABLED or not settings.AZURE_AD_SYNC_ENABLED:
+        azure_settings = self._get_settings()
+        
+        if not azure_settings.is_configured:
+            return False, {"error": "Azure AD is not configured"}
+            
+        if not azure_settings.enabled or not azure_settings.sync_enabled:
             return False, {"error": "Azure AD sync is disabled"}
         
         if not user.azure_ad_object_id:
@@ -312,7 +361,12 @@ class AzureADService:
         """
         Get user details from Azure AD.
         """
-        if not settings.AZURE_AD_ENABLED:
+        azure_settings = self._get_settings()
+        
+        if not azure_settings.is_configured:
+            return False, {"error": "Azure AD is not configured"}
+            
+        if not azure_settings.enabled:
             return False, {"error": "Azure AD is disabled"}
         
         success, result = self._make_graph_request("GET", f"users/{azure_ad_object_id}")
@@ -346,17 +400,61 @@ class AzureADService:
         """
         Test the connection to Microsoft Graph API.
         """
-        success, result = self._make_graph_request("GET", "me")
+        azure_settings = self._get_settings()
+        
+        if not azure_settings.is_configured:
+            return False, {
+                "error": "Azure AD is not configured",
+                "details": "Please configure tenant ID, client ID, and client secret"
+            }
+        
+        # Test token acquisition first
+        try:
+            token = self._get_access_token()
+            if not token:
+                return False, {
+                    "error": "Failed to acquire access token",
+                    "details": "Check client credentials and permissions"
+                }
+        except Exception as e:
+            return False, {
+                "error": "Token acquisition failed",
+                "details": str(e)
+            }
+        
+        # Test API connectivity with a simple endpoint that requires minimal permissions
+        # Using /organization instead of /me as it works with application permissions
+        success, result = self._make_graph_request("GET", "organization")
         
         if success:
             return True, {
                 "message": "Successfully connected to Microsoft Graph API",
-                "service_principal": result
+                "tenant_info": result.get("value", [{}])[0] if result.get("value") else {},
+                "token_acquired": True
             }
         else:
+            # Provide more detailed error information
+            error_details = result.get("details", "Unknown error")
+            
+            # Parse common error scenarios
+            if "401" in str(error_details):
+                error_msg = "Authentication failed - check client ID and secret"
+            elif "403" in str(error_details):
+                error_msg = "Access denied - check API permissions"
+            elif "404" in str(error_details):
+                error_msg = "Endpoint not found - check tenant ID"
+            else:
+                error_msg = "Failed to connect to Microsoft Graph API"
+            
             return False, {
-                "error": "Failed to connect to Microsoft Graph API",
-                "details": result
+                "error": error_msg,
+                "details": error_details,
+                "troubleshooting": {
+                    "check_tenant_id": azure_settings.tenant_id[:8] + "..." if azure_settings.tenant_id else "Not set",
+                    "check_client_id": azure_settings.client_id[:8] + "..." if azure_settings.client_id else "Not set",
+                    "check_client_secret": "Set" if azure_settings.client_secret else "Not set",
+                    "authority_url": azure_settings.authority_url
+                }
             }
 
 
