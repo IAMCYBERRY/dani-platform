@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  web:
+    image: your-dockerhub-username/dani-platform:latest
+    container_name: dani_web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - media_files:/app/media
+      - static_files:/app/staticfiles
+      - app_logs:/app/logs
+    networks:
+      - dani_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/admin/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: dani_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-hris_platform}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dani_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: dani_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - dani_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  celery:
+    image: your-dockerhub-username/dani-platform:latest
+    container_name: dani_celery
+    restart: unless-stopped
+    command: celery -A hris_platform worker -l info
+    environment:
+      - DEBUG=False
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - media_files:/app/media
+      - app_logs:/app/logs
+    networks:
+      - dani_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: dani_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - static_files:/var/www/static:ro
+      - media_files:/var/www/media:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - web
+    networks:
+      - dani_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_files:
+  static_files:
+  app_logs:
+
+networks:
+  dani_network:
+    driver: bridge

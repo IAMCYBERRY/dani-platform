@@ -1,0 +1,1 @@
+# Recruitment app for ATS functionality
