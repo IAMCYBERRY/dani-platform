@@ -17,7 +17,58 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-producti
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+# Dynamic ALLOWED_HOSTS configuration
+import socket
+import subprocess
+
+def get_server_ip():
+    """Get the server's IP address for ALLOWED_HOSTS"""
+    try:
+        # Try to get external IP first
+        result = subprocess.run(['curl', '-s', '-4', 'ifconfig.me'], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except:
+        pass
+    
+    try:
+        # Get internal IP via routing table
+        result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            for line in result.stdout.split():
+                if line.startswith('src'):
+                    continue
+                if '.' in line and len(line.split('.')) == 4:
+                    return line
+    except:
+        pass
+    
+    try:
+        # Fallback to socket method
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return None
+
+# Base allowed hosts from environment
+allowed_hosts = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0').split(',')
+allowed_hosts = [host.strip() for host in allowed_hosts if host.strip()]
+
+# Add server IP if we can detect it
+server_ip = get_server_ip()
+if server_ip and server_ip not in allowed_hosts:
+    allowed_hosts.append(server_ip)
+
+# Allow all hosts in DEBUG mode
+if DEBUG:
+    allowed_hosts.append('*')
+
+ALLOWED_HOSTS = allowed_hosts
 
 # Application definition
 DJANGO_APPS = [

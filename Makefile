@@ -8,6 +8,7 @@ help:
 	@echo "  build          - Build Docker images"
 	@echo "  up             - Start development environment"
 	@echo "  up-prod        - Start production environment"
+	@echo "  up-https       - Start with HTTPS/SSL support"
 	@echo "  up-tools       - Start with development tools (pgAdmin, Redis Commander)"
 	@echo "  down           - Stop all services"
 	@echo "  restart        - Restart all services"
@@ -23,6 +24,7 @@ help:
 	@echo "  collectstatic  - Collect static files"
 	@echo "  backup-db      - Backup database"
 	@echo "  restore-db     - Restore database from backup"
+	@echo "  setup-https    - Setup HTTPS with Let's Encrypt (requires DOMAIN variable)"
 	@echo "  clean          - Clean up containers and volumes"
 	@echo "  clean-all      - Clean everything including images"
 
@@ -37,6 +39,10 @@ up:
 # Production environment
 up-prod:
 	docker-compose --profile production up -d
+
+# HTTPS environment with SSL
+up-https:
+	docker-compose -f docker-compose.yml -f docker-compose.https.yml up -d
 
 # Development with tools
 up-tools:
@@ -136,6 +142,12 @@ health:
 	@echo "Testing Redis..."
 	@docker-compose exec redis redis-cli ping > /dev/null 2>&1 && echo "✓ Redis is healthy" || echo "✗ Redis is not responding"
 
+# Setup HTTPS with Let's Encrypt
+setup-https:
+	@if [ -z "$(DOMAIN)" ]; then echo "Usage: make setup-https DOMAIN=yourdomain.com"; exit 1; fi
+	@chmod +x setup-https.sh
+	@./setup-https.sh $(DOMAIN) $(EMAIL)
+
 # Initialize project (first time setup)
 init:
 	@echo "Initializing HRIS Platform..."
@@ -162,7 +174,7 @@ init:
 	docker-compose exec web python manage.py shell -c "from accounts.models import User; User.objects.filter(email='admin@hris.local').exists() or User.objects.create_superuser(email='admin@hris.local', password='admin123', first_name='System', last_name='Administrator', role='admin')"
 	@echo "\n🎉 Setup complete!"
 	@echo "🌐 Access your D.A.N.I platform:"
-	@VM_IP=$$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $$1}' || echo "localhost"); \
+	@VM_IP=$$(curl -s -4 ifconfig.me 2>/dev/null || ip route get 8.8.8.8 | awk '{print $$7; exit}' 2>/dev/null || hostname -I | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -1 || echo "localhost"); \
 	echo "   Main app: http://$$VM_IP:8000/"; \
 	echo "   Admin:    http://$$VM_IP:8000/admin/"
 	@echo "🔐 Default credentials:"

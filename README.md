@@ -208,6 +208,47 @@ sudo apt install make -y
 - **Web Interface**: http://your-server-ip:8000/ or https://your-domain.com
 - **Admin Panel**: http://your-server-ip:8000/admin/
 
+## 🔒 HTTPS/SSL Setup (Recommended for Production)
+
+For production deployments, enable HTTPS with automatic SSL certificates:
+
+### Option 1: Automated HTTPS Setup
+```bash
+# Set up HTTPS with Let's Encrypt (requires domain pointing to your server)
+make setup-https DOMAIN=dani.yourdomain.com EMAIL=admin@yourdomain.com
+
+# Or run the script directly
+chmod +x setup-https.sh
+./setup-https.sh dani.yourdomain.com admin@yourdomain.com
+```
+
+### Option 2: Manual HTTPS Setup
+```bash
+# 1. Point your domain's A record to your server's IP
+# 2. Update your .env file with your domain
+echo "DOMAIN=dani.yourdomain.com" >> .env
+
+# 3. Start with HTTPS
+make up-https
+
+# 4. Generate SSL certificate
+docker-compose -f docker-compose.yml -f docker-compose.https.yml run --rm certbot \
+    certbot certonly --webroot --webroot-path=/var/www/certbot \
+    --email admin@yourdomain.com --agree-tos --no-eff-email \
+    -d dani.yourdomain.com
+```
+
+### HTTPS Requirements
+- **Domain**: You need a domain name pointing to your server
+- **Port 80/443**: Must be accessible from the internet
+- **DNS**: A record must point to your server's public IP
+
+### After HTTPS Setup
+- Access via: `https://your-domain.com`
+- Certificates auto-renew every 12 hours
+- HTTP traffic automatically redirects to HTTPS
+- Security headers are automatically added
+
 ---
 
 ## 🔐 Azure AD / Microsoft Entra Integration

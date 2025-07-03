@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Extend base web service
+  web:
+    environment:
+      - SECURE_SSL_REDIRECT=True
+      - SECURE_HSTS_SECONDS=31536000
+      - SECURE_HSTS_INCLUDE_SUBDOMAINS=True
+      - SECURE_HSTS_PRELOAD=True
+
+  # Nginx with SSL/HTTPS support
+  nginx-ssl:
+    image: nginx:alpine
+    container_name: dani_nginx_ssl
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-ssl.conf:/etc/nginx/nginx.conf:ro
+      - ./staticfiles:/var/www/static:ro
+      - ./media:/var/www/media:ro
+      - ssl_certs:/etc/letsencrypt:ro
+      - ssl_www:/var/www/certbot:ro
+    depends_on:
+      - web
+    networks:
+      - default
+
+  # Certbot for Let's Encrypt SSL certificates
+  certbot:
+    image: certbot/certbot:latest
+    container_name: dani_certbot
+    volumes:
+      - ssl_certs:/etc/letsencrypt
+      - ssl_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  ssl_certs:
+  ssl_www:
+
+networks:
+  default:
+    name: hris_network

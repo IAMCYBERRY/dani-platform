@@ -114,7 +114,8 @@ echo "3. Deploy D.A.N.I:"
 echo "   make init"
 echo ""
 echo "🌐 After deployment, access at:"
-VM_IP=$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}' || echo "YOUR_VM_IP")
+# Get IPv4 address preferentially
+VM_IP=$(curl -s -4 ifconfig.me 2>/dev/null || ip route get 8.8.8.8 | awk '{print $7; exit}' 2>/dev/null || hostname -I | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -1 || echo "YOUR_VM_IP")
 echo "   http://$VM_IP:8000/admin/"
 echo ""
 echo "🔐 Default credentials:"
