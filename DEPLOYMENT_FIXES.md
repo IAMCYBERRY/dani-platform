@@ -96,12 +96,12 @@ This document summarizes all the fixes applied to ensure D.A.N.I deploys cleanly
 ### **Super Simple Deployment**:
 ```bash
 # Option 1: Complete VM setup
-curl -s https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/vm-setup.sh | bash
+curl -s https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/vm-setup.sh | bash
 # Then log back in and run:
 cd dani-platform && make init
 
 # Option 2: Manual deployment
-git clone https://github.com/YOUR_USERNAME/dani-platform.git
+git clone https://github.com/IAMCYBERRY/dani-platform.git
 cd dani-platform
 make init
 ```

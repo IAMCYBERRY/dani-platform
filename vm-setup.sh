@@ -48,7 +48,7 @@ sudo ufw --force enable
 # Clone D.A.N.I repository
 echo "📥 Cloning D.A.N.I repository..."
 if [ ! -d "dani-platform" ]; then
-    git clone https://github.com/YOUR_USERNAME/dani-platform.git
+    git clone https://github.com/IAMCYBERRY/dani-platform.git
     cd dani-platform
 else
     echo "✅ Repository already exists"

@@ -14,8 +14,8 @@ chmod 755 logs media staticfiles
 
 # Download configuration files
 echo "📥 Downloading configuration files..."
-curl -s -O https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/docker-compose.production.yml
-curl -s -O https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/.env.example
+curl -s -O https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/docker-compose.production.yml
+curl -s -O https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/.env.example
 
 # Setup environment
 if [ ! -f .env ]; then
