@@ -388,7 +388,7 @@ docker volume prune -f
 # Remove and re-clone project
 cd ~
 rm -rf dani-platform
-git clone https://github.com/YOUR_USERNAME/dani-platform.git
+git clone https://github.com/IAMCYBERRY/dani-platform.git
 cd dani-platform
 
 # Fresh setup

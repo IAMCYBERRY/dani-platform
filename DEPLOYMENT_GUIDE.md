@@ -159,7 +159,7 @@ This comprehensive guide covers two deployment methods:
 
    # Push to GitHub
    git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/dani-platform.git
+   git remote add origin https://github.com/IAMCYBERRY/dani-platform.git
    git push -u origin main
    ```
 
@@ -175,7 +175,7 @@ This comprehensive guide covers two deployment methods:
    Then push your code:
    ```bash
    git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/dani-platform.git
+   git remote add origin https://github.com/IAMCYBERRY/dani-platform.git
    git push -u origin main
    ```
 
@@ -275,7 +275,7 @@ This comprehensive guide covers two deployment methods:
 
    services:
      web:
-       image: your-dockerhub-username/dani-platform:latest
+       image: iamcyberry/dani-platform:latest
        container_name: dani_web
        restart: unless-stopped
        ports:
@@ -335,7 +335,7 @@ This comprehensive guide covers two deployment methods:
          retries: 3
 
      celery:
-       image: your-dockerhub-username/dani-platform:latest
+       image: iamcyberry/dani-platform:latest
        container_name: dani_celery
        restart: unless-stopped
        command: celery -A hris_platform worker -l info
@@ -404,8 +404,8 @@ This comprehensive guide covers two deployment methods:
    docker buildx build \
      --platform linux/amd64,linux/arm64 \
      -f Dockerfile.production \
-     -t your-dockerhub-username/dani-platform:latest \
-     -t your-dockerhub-username/dani-platform:v1.0.0 \
+     -t iamcyberry/dani-platform:latest \
+     -t iamcyberry/dani-platform:v1.0.0 \
      --push .
    ```
 
@@ -431,7 +431,7 @@ This comprehensive guide covers two deployment methods:
 
    env:
      REGISTRY: docker.io
-     IMAGE_NAME: your-dockerhub-username/dani-platform
+     IMAGE_NAME: iamcyberry/dani-platform
 
    jobs:
      build:
@@ -502,8 +502,8 @@ This comprehensive guide covers two deployment methods:
 
 2. **Download production compose file**
    ```bash
-   curl -O https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/docker-compose.production.yml
-   curl -O https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/.env.example
+   curl -O https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/docker-compose.production.yml
+   curl -O https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/.env.example
    ```
 
 3. **Configure environment**
@@ -515,7 +515,7 @@ This comprehensive guide covers two deployment methods:
 4. **Deploy**
    ```bash
    # Update the image name in docker-compose.production.yml
-   sed -i 's/your-dockerhub-username/YOUR_ACTUAL_USERNAME/g' docker-compose.production.yml
+   sed -i 's/iamcyberry/YOUR_ACTUAL_USERNAME/g' docker-compose.production.yml
 
    # Start services
    docker-compose -f docker-compose.production.yml up -d
@@ -545,8 +545,8 @@ This comprehensive guide covers two deployment methods:
    cd ~/dani-platform
 
    # Download configuration files
-   curl -s -O https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/docker-compose.production.yml
-   curl -s -O https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/.env.example
+   curl -s -O https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/docker-compose.production.yml
+   curl -s -O https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/.env.example
 
    # Setup environment
    if [ ! -f .env ]; then
@@ -557,7 +557,7 @@ This comprehensive guide covers two deployment methods:
    fi
 
    # Update image names
-   sed -i 's/your-dockerhub-username/YOUR_ACTUAL_USERNAME/g' docker-compose.production.yml
+   sed -i 's/iamcyberry/YOUR_ACTUAL_USERNAME/g' docker-compose.production.yml
 
    # Pull latest images
    docker-compose -f docker-compose.production.yml pull
@@ -613,7 +613,7 @@ This comprehensive guide covers two deployment methods:
 
 2. **Deploy with one command**
    ```bash
-   curl -s https://raw.githubusercontent.com/YOUR_USERNAME/dani-platform/main/deploy-dani.sh | bash
+   curl -s https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/deploy-dani.sh | bash
    ```
 
 ### Option C: Docker Run (Minimal Setup)
@@ -654,7 +654,7 @@ docker run -d \
   -e ALLOWED_HOSTS=* \
   -v media_files:/app/media \
   -v app_logs:/app/logs \
-  your-dockerhub-username/dani-platform:latest
+  iamcyberry/dani-platform:latest
 
 # Run migrations
 sleep 15

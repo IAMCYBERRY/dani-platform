@@ -139,7 +139,7 @@ sudo apt install make -y
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/dani-platform.git
+   git clone https://github.com/IAMCYBERRY/dani-platform.git
    cd dani-platform
    ```
 

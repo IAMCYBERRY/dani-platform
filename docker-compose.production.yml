@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   web:
-    image: your-dockerhub-username/dani-platform:latest
+    image: iamcyberry/dani-platform:latest
     container_name: dani_web
     restart: unless-stopped
     ports:
@@ -62,7 +62,7 @@ services:
       retries: 3
 
   celery:
-    image: your-dockerhub-username/dani-platform:latest
+    image: iamcyberry/dani-platform:latest
     container_name: dani_celery
     restart: unless-stopped
     command: celery -A hris_platform worker -l info

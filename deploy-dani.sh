@@ -34,7 +34,7 @@ if ! docker ps >/dev/null 2>&1; then
 fi
 
 # Update image names
-sed -i 's/your-dockerhub-username/YOUR_ACTUAL_USERNAME/g' docker-compose.production.yml
+sed -i 's/iamcyberry/YOUR_ACTUAL_USERNAME/g' docker-compose.production.yml
 
 # Pull latest images
 docker-compose -f docker-compose.production.yml pull
