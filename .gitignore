@@ -135,8 +135,11 @@ static/
 logs/
 *.log
 
-# Environment files
-.env.*
+# Environment files (but keep .env.example)
+.env
+.env.local
+.env.production
+.env.*.local
 
 # IDE
 .vscode/

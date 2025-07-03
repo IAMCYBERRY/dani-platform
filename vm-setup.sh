@@ -61,6 +61,39 @@ echo "📁 Creating required directories..."
 mkdir -p logs media staticfiles
 chmod 755 logs media staticfiles
 
+# Create environment template if missing
+if [ ! -f .env.example ]; then
+    echo "⚠️  .env.example missing, creating it..."
+    cat > .env.example << 'EOF'
+# Django Configuration
+DEBUG=True
+SECRET_KEY=your-secret-key-here-change-in-production
+ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+
+# Database Configuration
+DB_NAME=hris_platform
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_HOST=postgres
+DB_PORT=5432
+
+# Redis/Celery Configuration
+CELERY_BROKER_URL=redis://redis:6380/0
+CELERY_RESULT_BACKEND=redis://redis:6380/0
+
+# Logging Configuration
+USE_FILE_LOGGING=true
+LOG_LEVEL=INFO
+
+# Superuser Configuration (for Docker setup)
+SUPERUSER_EMAIL=admin@dani.local
+SUPERUSER_PASSWORD=admin123
+
+# Application Configuration
+LOAD_INITIAL_DATA=False
+EOF
+fi
+
 # Copy environment template
 if [ ! -f .env ]; then
     cp .env.example .env
