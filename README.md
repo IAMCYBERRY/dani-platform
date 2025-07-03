@@ -44,7 +44,7 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
 
 1. **Clone and navigate to directory**
    ```bash
-   git clone https://github.com/yourusername/dani-platform.git
+   git clone https://github.com/IAMCYBERRY/dani-platform.git
    cd dani-platform
    ```
 
