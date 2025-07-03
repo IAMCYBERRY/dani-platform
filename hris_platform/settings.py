@@ -220,7 +220,51 @@ ADMIN_SITE_HEADER = 'D.A.N.I Administration'
 ADMIN_SITE_TITLE = 'D.A.N.I Admin Portal'
 ADMIN_INDEX_TITLE = 'Welcome to D.A.N.I - Domain Access & Navigation Interface'
 
-# Logging configuration
+# Container-friendly logging configuration
+import logging.handlers
+
+# Determine logging configuration based on environment
+USE_FILE_LOGGING = config('USE_FILE_LOGGING', default=True, cast=bool)
+LOG_LEVEL = config('LOG_LEVEL', default='INFO')
+
+# Create logs directory safely
+LOGS_DIR = BASE_DIR / 'logs'
+try:
+    LOGS_DIR.mkdir(exist_ok=True)
+    # Test if we can write to the logs directory
+    test_file = LOGS_DIR / 'test.log'
+    test_file.touch()
+    test_file.unlink()
+    file_logging_available = USE_FILE_LOGGING
+except (PermissionError, OSError):
+    file_logging_available = False
+
+# Configure logging handlers
+LOGGING_HANDLERS = {
+    'console': {
+        'level': LOG_LEVEL,
+        'class': 'logging.StreamHandler',
+        'formatter': 'verbose',
+    },
+}
+
+# Add file handler only if available and enabled
+if file_logging_available:
+    LOGGING_HANDLERS['file'] = {
+        'level': LOG_LEVEL,
+        'class': 'logging.handlers.RotatingFileHandler',
+        'filename': LOGS_DIR / 'django.log',
+        'maxBytes': 1024*1024*10,  # 10MB
+        'backupCount': 5,
+        'formatter': 'verbose',
+    }
+
+# Choose handlers based on availability
+if file_logging_available:
+    DEFAULT_HANDLERS = ['console', 'file']
+else:
+    DEFAULT_HANDLERS = ['console']
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -229,30 +273,26 @@ LOGGING = {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
-    },
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'formatter': 'verbose',
-        },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
         },
     },
+    'handlers': LOGGING_HANDLERS,
     'loggers': {
         'django': {
-            'handlers': ['file', 'console'],
-            'level': 'INFO',
+            'handlers': DEFAULT_HANDLERS,
+            'level': LOG_LEVEL,
             'propagate': True,
         },
         'hris_platform': {
-            'handlers': ['file', 'console'],
-            'level': 'INFO',
+            'handlers': DEFAULT_HANDLERS,
+            'level': LOG_LEVEL,
             'propagate': True,
         },
+    },
+    'root': {
+        'handlers': DEFAULT_HANDLERS,
+        'level': LOG_LEVEL,
     },
 }

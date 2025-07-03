@@ -44,8 +44,8 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
 
 1. **Clone and navigate to directory**
    ```bash
-   git clone https://github.com/yourusername/hris-platform.git
-   cd hris-platform
+   git clone https://github.com/yourusername/dani-platform.git
+   cd dani-platform
    ```
 
 2. **One-command setup** (recommended)
@@ -55,21 +55,23 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
    
    **OR manually run:**
    ```bash
+   # Create required directories
+   mkdir -p logs media staticfiles
+   
+   # Copy environment file
+   cp .env.example .env
+   
    # Build and start all services
    docker-compose up -d --build
-   
-   # Wait 30 seconds for services to start, then run migrations
-   sleep 30
-   docker-compose exec web python manage.py migrate
    ```
 
 3. **Access your D.A.N.I platform**
-   - **Main Application**: http://localhost:8000/
-   - **Admin Panel**: http://localhost:8000/admin/
-   - **API Docs**: http://localhost:8000/api/
+   - **Main Application**: http://YOUR_VM_IP:8000/
+   - **Admin Panel**: http://YOUR_VM_IP:8000/admin/
+   - **API Docs**: http://YOUR_VM_IP:8000/api/
 
 4. **Login with default admin account**
-   - **Email**: `admin@hris.local`
+   - **Email**: `admin@dani.local`
    - **Password**: `admin123`
    - ⚠️ **Change this password immediately after first login!**
 
@@ -100,6 +102,13 @@ docker-compose restart
 # Clean restart
 docker-compose down -v && docker-compose up -d --build
 ```
+
+**📚 For comprehensive troubleshooting guide, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)**
+
+**Common fixes:**
+- Docker permissions: `sudo usermod -aG docker $USER && newgrp docker`
+- Missing directories: `mkdir -p logs media staticfiles && chmod 755 logs media staticfiles`
+- Port conflicts: Use ports 5433 (postgres) and 6380 (redis)
 
 ---
 

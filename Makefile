@@ -139,6 +139,9 @@ health:
 # Initialize project (first time setup)
 init:
 	@echo "Initializing HRIS Platform..."
+	@echo "Creating required directories..."
+	@mkdir -p logs media staticfiles
+	@chmod 755 logs media staticfiles
 	make setup-dev
 	make build
 	make up
@@ -158,6 +161,11 @@ init:
 	@echo "Creating superuser..."
 	docker-compose exec web python manage.py shell -c "from accounts.models import User; User.objects.filter(email='admin@hris.local').exists() or User.objects.create_superuser(email='admin@hris.local', password='admin123', first_name='System', last_name='Administrator', role='admin')"
 	@echo "\n🎉 Setup complete!"
-	@echo "Access the application at: http://localhost:8000"
-	@echo "Admin interface: http://localhost:8000/admin/"
-	@echo "Default credentials: admin@hris.local / admin123"
+	@echo "🌐 Access your D.A.N.I platform:"
+	@VM_IP=$$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $$1}' || echo "localhost"); \
+	echo "   Main app: http://$$VM_IP:8000/"; \
+	echo "   Admin:    http://$$VM_IP:8000/admin/"
+	@echo "🔐 Default credentials:"
+	@echo "   Email:    admin@hris.local"
+	@echo "   Password: admin123"
+	@echo "⚠️  IMPORTANT: Change the default password after first login!"
