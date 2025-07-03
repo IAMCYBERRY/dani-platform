@@ -100,6 +100,10 @@ class User(AbstractBaseUser, PermissionsMixin):
         default='pending',
         help_text='Current Azure AD sync status'
     )
+    azure_ad_sync_error = models.TextField(
+        blank=True,
+        help_text='Last sync error message for troubleshooting'
+    )
     
     # Manager for custom user operations
     objects = UserManager()
