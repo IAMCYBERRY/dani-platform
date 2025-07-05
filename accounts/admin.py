@@ -80,6 +80,9 @@ class UserAdmin(BaseUserAdmin):
     
     def azure_ad_status_display(self, obj):
         """Display Azure AD sync status with visual indicators."""
+        if not obj.azure_ad_sync_enabled:
+            return format_html('<span style="color: gray;">🚫 Disabled</span>')
+        
         status_colors = {
             'synced': 'green',
             'pending': 'orange', 
