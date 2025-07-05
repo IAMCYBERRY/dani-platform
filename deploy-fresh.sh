@@ -2,7 +2,21 @@
 
 # DANI Platform - Fresh Deployment Script
 # This script sets up a complete DANI HRIS platform on a fresh Ubuntu VM
-# Usage: curl -sSL https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/deploy-fresh.sh | bash
+#
+# Usage Options:
+# 1. With environment variables (recommended for automation):
+#    ADMIN_EMAIL="you@domain.com" DOMAIN_NAME="your-domain.com" \
+#    curl -sSL https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/deploy-fresh.sh | bash
+#
+# 2. Download and run interactively:
+#    wget https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/deploy-fresh.sh
+#    chmod +x deploy-fresh.sh
+#    ./deploy-fresh.sh
+#    # Will prompt for email and domain
+#
+# 3. Minimal automation (without SSL):
+#    ADMIN_EMAIL="you@domain.com" \
+#    curl -sSL https://raw.githubusercontent.com/IAMCYBERRY/dani-platform/main/deploy-fresh.sh | bash
 
 set -e  # Exit on any error
 
@@ -32,13 +46,13 @@ if [[ $EUID -eq 0 ]]; then
    error "This script should not be run as root. Please run as a regular user with sudo privileges."
 fi
 
-# Configuration variables - modify these before running
-DOMAIN_NAME=""  # Set your domain name (optional)
-DB_PASSWORD=""  # Will be generated if empty
-SECRET_KEY=""   # Will be generated if empty
-ADMIN_EMAIL=""  # Required for SSL certificate
-DEPLOY_PATH="/opt/dani"
-SERVICE_NAME="dani-platform"
+# Configuration variables - can be set via environment variables or modified here
+DOMAIN_NAME="${DOMAIN_NAME:-}"  # Set your domain name (optional)
+DB_PASSWORD="${DB_PASSWORD:-}"  # Will be generated if empty
+SECRET_KEY="${SECRET_KEY:-}"   # Will be generated if empty
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"  # Required for SSL certificate
+DEPLOY_PATH="${DEPLOY_PATH:-/opt/dani}"
+SERVICE_NAME="${SERVICE_NAME:-dani-platform}"
 
 log "Starting DANI Platform fresh deployment..."
 
@@ -47,16 +61,25 @@ if ! grep -q "Ubuntu" /etc/os-release; then
     error "This script is designed for Ubuntu. Please use Ubuntu 20.04 or later."
 fi
 
-# Prompt for required configuration if not set
+# Check for required configuration
 if [ -z "$ADMIN_EMAIL" ]; then
-    read -p "Enter admin email address: " ADMIN_EMAIL
-    if [ -z "$ADMIN_EMAIL" ]; then
-        error "Admin email is required"
+    # Try to read from terminal if available
+    if [ -t 0 ]; then
+        read -p "Enter admin email address: " ADMIN_EMAIL
+        if [ -z "$ADMIN_EMAIL" ]; then
+            error "Admin email is required for SSL certificate setup"
+        fi
+    else
+        error "Admin email is required. Set it as: ADMIN_EMAIL='you@domain.com' curl ... | bash"
     fi
 fi
 
 if [ -z "$DOMAIN_NAME" ]; then
-    read -p "Enter domain name (optional, press enter to skip): " DOMAIN_NAME
+    if [ -t 0 ]; then
+        read -p "Enter domain name (optional, press enter to skip): " DOMAIN_NAME
+    else
+        log "No domain name provided - SSL will not be configured automatically"
+    fi
 fi
 
 # Generate secure passwords and keys
