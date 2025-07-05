@@ -1,183 +1,191 @@
-# HRIS Platform Development Makefile
+# DANI Platform Makefile
+# Provides automated deployment and management commands
 
-.PHONY: help build up down restart logs shell test migrate createsuperuser clean backup
+.PHONY: help install update dev-setup test clean backup restore
 
 # Default target
 help:
-	@echo "Available commands:"
-	@echo "  build          - Build Docker images"
-	@echo "  up             - Start development environment"
-	@echo "  up-prod        - Start production environment"
-	@echo "  up-https       - Start with HTTPS/SSL support"
-	@echo "  up-tools       - Start with development tools (pgAdmin, Redis Commander)"
-	@echo "  down           - Stop all services"
-	@echo "  restart        - Restart all services"
-	@echo "  logs           - Show application logs"
-	@echo "  logs-f         - Follow application logs"
-	@echo "  shell          - Access Django shell"
-	@echo "  bash           - Access container bash"
-	@echo "  test           - Run tests"
-	@echo "  test-cov       - Run tests with coverage"
-	@echo "  migrate        - Run database migrations"
-	@echo "  makemigrations - Create new migrations"
-	@echo "  createsuperuser - Create Django superuser"
-	@echo "  collectstatic  - Collect static files"
-	@echo "  backup-db      - Backup database"
-	@echo "  restore-db     - Restore database from backup"
-	@echo "  setup-https    - Setup HTTPS with Let's Encrypt (requires DOMAIN variable)"
-	@echo "  clean          - Clean up containers and volumes"
-	@echo "  clean-all      - Clean everything including images"
+	@echo "DANI Platform Management Commands"
+	@echo "================================="
+	@echo ""
+	@echo "Deployment Commands:"
+	@echo "  make install         - Fresh installation on new server"
+	@echo "  make update          - Update existing installation"
+	@echo "  make dev-setup       - Set up local development environment"
+	@echo ""
+	@echo "Management Commands:"
+	@echo "  make backup          - Create backup of data and configuration"
+	@echo "  make restore BACKUP= - Restore from backup directory"
+	@echo "  make test            - Run test suite"
+	@echo "  make clean           - Clean temporary files"
+	@echo ""
+	@echo "Service Commands:"
+	@echo "  make start           - Start DANI platform service"
+	@echo "  make stop            - Stop DANI platform service"
+	@echo "  make restart         - Restart DANI platform service"
+	@echo "  make status          - Show service status"
+	@echo "  make logs            - Show service logs"
+	@echo ""
+	@echo "Database Commands:"
+	@echo "  make migrate         - Run database migrations"
+	@echo "  make superuser       - Create superuser account"
+	@echo "  make shell           - Open Django shell"
+	@echo ""
 
-# Build Docker images
-build:
-	docker-compose build
+# Fresh installation
+install:
+	@echo "Starting fresh DANI Platform installation..."
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		echo "ERROR: Existing installation detected. Use 'make update' instead."; \
+		exit 1; \
+	fi
+	chmod +x deploy-fresh.sh
+	./deploy-fresh.sh
 
-# Development environment
-up:
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Update existing installation
+update:
+	@echo "Updating DANI Platform..."
+	@if [ ! -f "/opt/dani/manage.py" ]; then \
+		echo "ERROR: No existing installation found. Use 'make install' instead."; \
+		exit 1; \
+	fi
+	chmod +x deploy-update.sh
+	./deploy-update.sh
 
-# Production environment
-up-prod:
-	docker-compose --profile production up -d
+# Local development setup
+dev-setup:
+	@echo "Setting up local development environment..."
+	python3 -m venv venv
+	./venv/bin/pip install --upgrade pip
+	./venv/bin/pip install -r requirements.txt
+	@if [ ! -f ".env" ]; then \
+		cp .env.example .env; \
+		echo "Created .env file from template. Please configure it."; \
+	fi
+	./venv/bin/python manage.py migrate
+	@echo "Development setup complete!"
+	@echo "Run: source venv/bin/activate && python manage.py runserver"
 
-# HTTPS environment with SSL
-up-https:
-	docker-compose -f docker-compose.yml -f docker-compose.https.yml up -d
+# Create backup
+backup:
+	@echo "Creating backup..."
+	sudo /usr/local/bin/backup-dani.sh
 
-# Development with tools
-up-tools:
-	docker-compose -f docker-compose.yml -f docker-compose.dev.yml --profile dev-tools up -d
-
-# Stop services
-down:
-	docker-compose down
-
-# Restart services
-restart:
-	docker-compose restart
-
-# View logs
-logs:
-	docker-compose logs
-
-# Follow logs
-logs-f:
-	docker-compose logs -f
-
-# Django shell
-shell:
-	docker-compose exec web python manage.py shell
-
-# Container bash
-bash:
-	docker-compose exec web bash
+# Restore from backup
+restore:
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "ERROR: Please specify backup directory: make restore BACKUP=/path/to/backup"; \
+		exit 1; \
+	fi
+	@echo "Restoring from backup: $(BACKUP)"
+	sudo systemctl stop dani-platform
+	sudo -u postgres dropdb dani_platform || true
+	sudo -u postgres createdb dani_platform
+	sudo -u postgres psql dani_platform < $(BACKUP)/database.sql
+	sudo cp -r $(BACKUP)/media/* /opt/dani/media/
+	sudo cp $(BACKUP)/.env /opt/dani/
+	sudo chown -R www-data:www-data /opt/dani
+	sudo systemctl start dani-platform
+	@echo "Restore completed"
 
 # Run tests
 test:
-	docker-compose exec web python manage.py test
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		sudo -u www-data /opt/dani/venv/bin/python /opt/dani/manage.py test; \
+	elif [ -f "manage.py" ]; then \
+		./venv/bin/python manage.py test; \
+	else \
+		echo "ERROR: No DANI installation found"; \
+		exit 1; \
+	fi
 
-# Run tests with coverage
-test-cov:
-	docker-compose exec web coverage run manage.py test
-	docker-compose exec web coverage report
-
-# Database migrations
-migrate:
-	docker-compose exec web python manage.py migrate
-
-# Create migrations
-makemigrations:
-	docker-compose exec web python manage.py makemigrations
-
-# Create superuser
-createsuperuser:
-	docker-compose exec web python manage.py createsuperuser
-
-# Collect static files
-collectstatic:
-	docker-compose exec web python manage.py collectstatic --noinput
-
-# Backup database
-backup-db:
-	@echo "Creating database backup..."
-	docker-compose exec postgres pg_dump -U postgres hris_platform > backup_$(shell date +%Y%m%d_%H%M%S).sql
-	@echo "Backup created: backup_$(shell date +%Y%m%d_%H%M%S).sql"
-
-# Restore database (requires BACKUP_FILE variable)
-restore-db:
-	@if [ -z "$(BACKUP_FILE)" ]; then echo "Usage: make restore-db BACKUP_FILE=backup.sql"; exit 1; fi
-	docker-compose exec -T postgres psql -U postgres hris_platform < $(BACKUP_FILE)
-
-# Clean containers and volumes
+# Clean temporary files
 clean:
-	docker-compose down -v
-	docker system prune -f
+	find . -name "*.pyc" -delete
+	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+	find . -name "*.log" -delete
+	@echo "Cleaned temporary files"
 
-# Clean everything including images
-clean-all:
-	docker-compose down -v --rmi all
-	docker system prune -af
+# Service management commands
+start:
+	sudo systemctl start dani-platform
+	@echo "DANI Platform started"
 
-# Setup development environment
-setup-dev:
-	@echo "Setting up development environment..."
-	cp .env.example .env
-	@echo "Please edit .env file with your configuration"
-	@echo "Then run: make up"
+stop:
+	sudo systemctl stop dani-platform
+	@echo "DANI Platform stopped"
 
-# Quick development start
-dev: up logs-f
+restart:
+	sudo systemctl restart dani-platform
+	@echo "DANI Platform restarted"
 
-# Production deployment
-deploy: build up-prod
+status:
+	sudo systemctl status dani-platform
 
-# Check services health
-health:
-	@echo "Checking service health..."
-	@docker-compose ps
-	@echo "\nTesting web service..."
-	@curl -f http://localhost:8000/admin/ > /dev/null 2>&1 && echo "✓ Web service is healthy" || echo "✗ Web service is not responding"
-	@echo "Testing database..."
-	@docker-compose exec postgres pg_isready -U postgres > /dev/null 2>&1 && echo "✓ Database is healthy" || echo "✗ Database is not responding"
-	@echo "Testing Redis..."
-	@docker-compose exec redis redis-cli ping > /dev/null 2>&1 && echo "✓ Redis is healthy" || echo "✗ Redis is not responding"
+logs:
+	sudo journalctl -u dani-platform -f
 
-# Setup HTTPS with Let's Encrypt
-setup-https:
-	@if [ -z "$(DOMAIN)" ]; then echo "Usage: make setup-https DOMAIN=yourdomain.com"; exit 1; fi
-	@chmod +x setup-https.sh
-	@./setup-https.sh $(DOMAIN) $(EMAIL)
+# Database commands
+migrate:
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		sudo -u www-data /opt/dani/venv/bin/python /opt/dani/manage.py makemigrations; \
+		sudo -u www-data /opt/dani/venv/bin/python /opt/dani/manage.py migrate; \
+	elif [ -f "manage.py" ]; then \
+		./venv/bin/python manage.py makemigrations; \
+		./venv/bin/python manage.py migrate; \
+	else \
+		echo "ERROR: No DANI installation found"; \
+		exit 1; \
+	fi
 
-# Initialize project (first time setup)
-init:
-	@echo "Initializing HRIS Platform..."
-	@echo "Creating required directories..."
-	@mkdir -p logs media staticfiles
-	@chmod 755 logs media staticfiles
-	make setup-dev
-	make build
-	make up
-	@echo "Waiting for services to start..."
-	@echo "Checking if services are ready..."
-	@for i in $$(seq 1 30); do \
-		if docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && \
-		   docker-compose exec -T web python -c "import django; print('Django ready')" >/dev/null 2>&1; then \
-			echo "Services are ready!"; \
-			break; \
-		fi; \
-		echo "Waiting... ($$i/30)"; \
-		sleep 2; \
-	done
-	@echo "Running database migrations..."
-	docker-compose exec web python manage.py migrate
-	@echo "Creating superuser..."
-	docker-compose exec web python manage.py shell -c "from accounts.models import User; User.objects.filter(email='admin@hris.local').exists() or User.objects.create_superuser(email='admin@hris.local', password='admin123', first_name='System', last_name='Administrator', role='admin')"
-	@echo "\n🎉 Setup complete!"
-	@echo "🌐 Access your D.A.N.I platform:"
-	@VM_IP=$$(curl -s -4 ifconfig.me 2>/dev/null || ip route get 8.8.8.8 | awk '{print $$7; exit}' 2>/dev/null || hostname -I | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -1 || echo "localhost"); \
-	echo "   Main app: http://$$VM_IP:8000/"; \
-	echo "   Admin:    http://$$VM_IP:8000/admin/"
-	@echo "🔐 Default credentials:"
-	@echo "   Email:    admin@hris.local"
-	@echo "   Password: admin123"
-	@echo "⚠️  IMPORTANT: Change the default password after first login!"
+superuser:
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		sudo -u www-data /opt/dani/venv/bin/python /opt/dani/manage.py createsuperuser; \
+	elif [ -f "manage.py" ]; then \
+		./venv/bin/python manage.py createsuperuser; \
+	else \
+		echo "ERROR: No DANI installation found"; \
+		exit 1; \
+	fi
+
+shell:
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		sudo -u www-data /opt/dani/venv/bin/python /opt/dani/manage.py shell; \
+	elif [ -f "manage.py" ]; then \
+		./venv/bin/python manage.py shell; \
+	else \
+		echo "ERROR: No DANI installation found"; \
+		exit 1; \
+	fi
+
+# Deployment verification
+verify:
+	@echo "Verifying DANI Platform deployment..."
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		echo "✓ Application files present"; \
+		sudo systemctl is-active --quiet dani-platform && echo "✓ Service running" || echo "✗ Service not running"; \
+		sudo systemctl is-active --quiet nginx && echo "✓ Nginx running" || echo "✗ Nginx not running"; \
+		sudo systemctl is-active --quiet postgresql && echo "✓ PostgreSQL running" || echo "✗ PostgreSQL not running"; \
+		curl -f -s http://localhost/ > /dev/null && echo "✓ Application responding" || echo "✗ Application not responding"; \
+		sudo -u www-data /opt/dani/venv/bin/python /opt/dani/manage.py check --database default && echo "✓ Database connection" || echo "✗ Database connection failed"; \
+	else \
+		echo "✗ No installation found"; \
+	fi
+
+# Show deployment information
+info:
+	@echo "DANI Platform Deployment Information"
+	@echo "==================================="
+	@if [ -f "/opt/dani/manage.py" ]; then \
+		echo "Installation Path: /opt/dani"; \
+		echo "Current Version: $$(cd /opt/dani && git describe --tags --always)"; \
+		echo "Current Branch: $$(cd /opt/dani && git rev-parse --abbrev-ref HEAD)"; \
+		echo "Database: dani_platform"; \
+		echo "Service: dani-platform"; \
+		echo "User: www-data"; \
+		echo ""; \
+		echo "Recent Backups:"; \
+		ls -la /backups/ | tail -5 || echo "No backups found"; \
+	else \
+		echo "No installation found"; \
+	fi
