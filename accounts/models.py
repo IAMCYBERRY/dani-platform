@@ -68,9 +68,50 @@ class User(AbstractBaseUser, PermissionsMixin):
         null=True
     )
     
-    # Organization context
-    department = models.CharField(max_length=100, blank=True)
-    job_title = models.CharField(max_length=100, blank=True)
+    # Organization context - Enhanced for Azure AD sync
+    company_name = models.CharField(max_length=100, blank=True, help_text='Company name for Azure AD sync')
+    department = models.ForeignKey(
+        'employees.Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        help_text='Department (synced with Azure AD)'
+    )
+    job_title = models.CharField(max_length=100, blank=True, help_text='Job title (synced with Azure AD)')
+    employee_id = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text='Unique employee identifier'
+    )
+    employee_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('full_time', 'Full Time'),
+            ('part_time', 'Part Time'),
+            ('contract', 'Contract'),
+            ('temporary', 'Temporary'),
+            ('intern', 'Intern'),
+        ],
+        blank=True,
+        help_text='Employment type (synced with Azure AD)'
+    )
+    manager = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='user_direct_reports',
+        help_text='Direct manager (synced with Azure AD)'
+    )
+    office_location = models.CharField(max_length=200, blank=True, help_text='Office location (synced with Azure AD)')
+    
+    # Employment dates
+    hire_date = models.DateField(null=True, blank=True, help_text='Date of hire')
+    start_date = models.DateField(null=True, blank=True, help_text='Start date for current position')
+    end_date = models.DateField(null=True, blank=True, help_text='End date (when applicable)')
     
     # Azure AD integration fields
     azure_ad_object_id = models.CharField(
@@ -102,6 +143,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     azure_ad_sync_error = models.TextField(
         blank=True,
+        null=True,
         help_text='Last sync error message for troubleshooting'
     )
     

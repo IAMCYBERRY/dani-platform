@@ -1,4 +1,4 @@
-# Generated manually for Azure AD sync error field
+# Generated manually for azure_ad_sync_error field
 
 from django.db import migrations, models
 
@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='user',
             name='azure_ad_sync_error',
-            field=models.TextField(blank=True, help_text='Last sync error message for troubleshooting'),
+            field=models.TextField(blank=True, null=True, help_text='Last sync error message for troubleshooting'),
         ),
     ]

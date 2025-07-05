@@ -1,181 +1,165 @@
 # Azure AD Admin Interface Guide
 
-This guide explains how to manage Azure AD synchronization through the D.A.N.I admin panel.
+This guide explains how to use the comprehensive Azure AD management features available in the Django admin interface.
 
-## 🎯 **Features Added**
+## Overview
 
-### **User Management**
-- ✅ **Visual sync status** with colored indicators and icons
-- ✅ **Error details** shown in tooltips for failed syncs
-- ✅ **Azure AD Object ID** displayed when available
-- ✅ **Comprehensive admin actions** for sync management
+The enhanced admin interface provides complete Azure AD sync management without requiring command-line access. All Azure AD operations can be performed directly from the web-based admin panel.
 
-### **Admin Actions Available**
+## Features
 
-#### **🔄 Sync Operations**
-1. **Sync selected users to Azure AD** - Standard sync for enabled users
-2. **Force sync selected users** - Ignores current status, forces sync
-3. **Reset sync status to pending** - Resets failed/disabled users to pending
+### Visual Status Indicators
 
-#### **⚙️ Status Management**
-4. **Enable Azure AD sync** - Enables sync for selected users
-5. **Disable Azure AD sync** - Disables sync for selected users  
-6. **Remove Azure AD Object ID** - Unlinks users from Azure AD
+In the user list, you'll see color-coded status indicators:
 
-#### **🧪 Testing**
-7. **Test Azure AD connection** - Tests the API connection
+- ✅ **Green "Synced"** - User is successfully synchronized
+- ⏳ **Orange "Pending"** - User is queued for synchronization  
+- ❌ **Red "Failed"** - Synchronization failed (hover over ⚠️ for error details)
+- 🚫 **Gray "Disabled"** - Sync is disabled for this user
 
-## 🖥️ **How to Use the Interface**
+### Available Admin Actions
 
-### **Access the Admin Panel**
-1. Go to: http://localhost:8000/admin/
-2. Login with admin credentials
-3. Click on **"Users"** under Accounts section
+Select users and choose from these actions:
 
-### **View Sync Status**
-The **Azure AD Status** column shows:
-- ✅ **Synced** (Green) - User successfully synced
-- ⏳ **Pending** (Orange) - Queued for sync
-- ❌ **Failed** (Red) - Sync failed (hover for error details)
-- 🚫 **Disabled** (Gray) - Sync disabled for user
+#### 1. 🔄 Sync selected users to Azure AD
+- Syncs users who have sync enabled
+- Respects individual user sync settings
+- Creates new users or updates existing ones
 
-### **Sync Users to Azure AD**
+#### 2. ⚡ Force sync selected users to Azure AD  
+- Forces sync regardless of user sync settings
+- Useful for troubleshooting or emergency syncs
+- Overrides disabled sync settings
 
-#### **Method 1: Standard Sync**
-1. Select users in the user list
-2. Choose **"🔄 Sync selected users to Azure AD"** from Actions dropdown
-3. Click **"Go"**
-4. View results in the success/error messages
+#### 3. ⏳ Reset sync status to pending
+- Changes status back to "pending"
+- Clears any previous error messages
+- Prepares users for fresh sync attempt
 
-#### **Method 2: Force Sync**
-1. Select users (including already synced or failed users)
-2. Choose **"🔄 Force sync selected users"** from Actions dropdown
-3. Click **"Go"**
-4. This will sync users regardless of current status
+#### 4. ✅ Enable Azure AD sync
+- Enables sync for selected users
+- Sets status to "pending"
+- Users will be synced on next sync operation
 
-### **Handle Failed Syncs**
+#### 5. 🚫 Disable Azure AD sync
+- Disables sync for selected users
+- Sets status to "disabled"
+- Users will be skipped in future sync operations
 
-#### **View Error Details**
-1. Look for users with ❌ **Failed** status
-2. **Hover over the status** to see the error message
-3. Or **click on the user** to see detailed error in the Azure AD section
+#### 6. 🔗 Remove Azure AD link
+- Removes the Azure AD Object ID link
+- Does NOT delete the user from Azure AD
+- User remains in Azure AD but is no longer linked
 
-#### **Fix Common Issues**
-1. **Empty Job Title Error**:
-   - Edit the user
-   - Add a job title (1-128 characters)
-   - Use "Reset sync status to pending" action
-   - Then sync again
+#### 7. 🔧 Test Azure AD connection
+- Tests connectivity to Microsoft Graph API
+- Validates configuration settings
+- Shows success/error messages
 
-2. **Authentication Errors**:
-   - Go to **Azure AD Settings**
-   - Use **"Test Azure AD connection"** action
-   - Fix credentials if test fails
+## User Details View
 
-#### **Retry Failed Syncs**
-1. Select failed users
-2. Choose **"🔄 Reset sync status to pending"** 
-3. Then use **"🔄 Sync selected users to Azure AD"**
+When editing individual users, the "Azure AD Integration" section shows:
 
-### **Manage Sync Settings**
+- **Azure AD Object ID**: Unique identifier in Azure AD (read-only)
+- **Azure AD Sync Enabled**: Whether sync is enabled for this user
+- **Azure AD Sync Status**: Current sync status
+- **Azure AD Last Sync**: Timestamp of last successful sync
+- **Azure AD Sync Error**: Details of last sync error (if any)
 
-#### **Enable/Disable Sync for Specific Users**
-1. Select users
-2. Use **"✅ Enable Azure AD sync"** or **"❌ Disable Azure AD sync"**
+## Error Troubleshooting
 
-#### **Unlink Users from Azure AD**
-1. Select users 
-2. Use **"🗑️ Remove Azure AD Object ID"**
-3. This removes the link but doesn't delete from Azure AD
-4. User will be treated as new on next sync
+### Common Error Messages
 
-## 🔧 **Azure AD Settings Management**
+1. **"jobTitle must be 1-128 characters"**
+   - Fixed automatically - job titles are now validated and truncated
 
-### **Configure Azure AD**
-1. Go to **Azure AD Settings** in admin
-2. Fill in:
-   - **Tenant ID** (from Azure Portal)
-   - **Client ID** (from App Registration) 
-   - **Client Secret** (from App Registration)
-3. Enable **"Enabled"** and **"Sync enabled"**
-4. Save settings
+2. **"Failed to connect to Microsoft Graph API"**
+   - Check Azure AD Settings configuration
+   - Use "Test Azure AD connection" action to diagnose
 
-### **Test Connection**
-1. In Azure AD Settings list view
-2. Select the settings record
-3. Choose **"Test Azure AD connection"** action
-4. Check the results in messages
+3. **"User already exists in Azure AD"**
+   - User has an Azure AD account but no Object ID stored locally
+   - Use "Force sync" to resolve linking
 
-### **Monitor Connection Status**
-The settings show:
-- **Connection Status**: Connected/Failed/Testing/Unknown
+### Sync Status Meanings
+
+- **Pending**: User is queued for next sync operation
+- **Synced**: User is successfully synchronized with Azure AD
+- **Failed**: Last sync attempt failed (check error field for details)
+- **Disabled**: Sync is disabled for this user
+
+## Best Practices
+
+### Regular Operations
+
+1. **Weekly Sync Review**: Check for users with "Failed" status
+2. **New User Setup**: Enable sync for new employees
+3. **Departing Users**: Disable sync instead of deleting (preserves audit trail)
+
+### Troubleshooting Workflow
+
+1. Use "Test Azure AD connection" to verify configuration
+2. Check failed users' error messages
+3. Use "Reset sync status to pending" to retry failed syncs
+4. Use "Force sync" for persistent issues
+
+### Bulk Operations
+
+- Select multiple users for batch operations
+- Use filters to find specific user groups
+- Always test with a small group first
+
+## Azure AD Settings
+
+Configure Azure AD integration in the "Azure AD Settings" section:
+
+### Basic Configuration
+- **Enabled**: Master switch for Azure AD integration
+- **Tenant ID**: Your Azure AD Directory ID
+- **Client ID**: Application (Client) ID from Azure AD
+- **Client Secret**: Client secret from Azure AD app registration
+
+### Sync Settings
+- **Sync Enabled**: Master switch for automatic synchronization
+- **Sync on User Create**: Auto-sync when creating new users
+- **Sync on User Update**: Auto-sync when updating user details
+- **Sync on User Disable**: Auto-sync when deactivating users
+
+### Connection Testing
+- **Connection Status**: Last test result
 - **Last Test Date**: When connection was last tested
-- **Test Error Message**: Details if connection failed
+- **Test Error Message**: Details of connection failures
 
-## 📊 **Understanding Sync Status**
+## Security Notes
 
-### **Status Meanings**
-- **Pending**: User queued for sync, hasn't been processed yet
-- **Synced**: User successfully created/updated in Azure AD
-- **Failed**: Sync attempt failed (check error details)
-- **Disabled**: Azure AD sync is disabled for this user
+- Only admin users can access Azure AD management features
+- All sync operations are logged
+- Sensitive configuration data is encrypted
+- Failed operations don't expose credentials in error messages
 
-### **When Automatic Sync Occurs**
-If enabled in Azure AD Settings:
-- **User Create**: New users are automatically synced
-- **User Update**: Changes to synced users are pushed to Azure AD
-- **User Disable**: Deactivated users are disabled in Azure AD
+## Getting Help
 
-## 🚨 **Troubleshooting**
+If you encounter issues:
 
-### **Common Error Messages**
+1. Check the error message in the user's "Azure AD Sync Error" field
+2. Use the "Test Azure AD connection" action
+3. Review the Django logs for detailed error information
+4. Verify your Azure AD app registration permissions
 
-#### **"Invalid value specified for property 'jobTitle'"**
-- **Cause**: Job title is empty or too long
-- **Fix**: Add/edit job title (1-128 characters), then retry sync
+## CLI Alternatives
 
-#### **"Authentication failed - check client ID and secret"**
-- **Cause**: Wrong Azure AD credentials
-- **Fix**: Verify credentials in Azure AD Settings, test connection
-
-#### **"Access denied - check API permissions"**
-- **Cause**: Missing API permissions in Azure AD
-- **Fix**: Grant admin consent for required permissions
-
-### **Manual Commands**
-For advanced troubleshooting, you can use management commands:
+For advanced users, command-line tools are available:
 
 ```bash
-# Test Azure AD connection
-docker-compose exec web python manage.py test_azure_ad --verbose
+# Test connection
+python manage.py test_azure_ad
 
 # Sync specific user
-docker-compose exec web python manage.py sync_azure_ad --user user@domain.com --force
+python manage.py sync_azure_ad --user email@domain.com
 
 # Sync all pending users
-docker-compose exec web python manage.py sync_azure_ad --all-pending
+python manage.py sync_azure_ad --all-pending
+
+# Dry run (show what would be synced)
+python manage.py sync_azure_ad --all-pending --dry-run
 ```
-
-## 📋 **Best Practices**
-
-### **Before Syncing Users**
-1. ✅ Test Azure AD connection first
-2. ✅ Ensure users have valid job titles
-3. ✅ Verify email domains match your Azure AD tenant
-4. ✅ Start with a few test users
-
-### **Regular Maintenance**
-1. 🔄 Monitor sync status regularly
-2. 🔍 Check for failed syncs and resolve issues
-3. 🧪 Test connection periodically
-4. 📝 Keep Azure AD credentials updated
-
-### **Production Deployment**
-1. 🔒 Use strong, non-default passwords for temporary passwords
-2. 🔐 Store Azure AD credentials securely
-3. 📊 Monitor sync performance and errors
-4. 🔄 Set up automated backup of user data
-
----
-
-**The Azure AD interface gives you complete control over user synchronization directly from the admin panel, with detailed error reporting and troubleshooting capabilities.** 🎯

@@ -28,15 +28,21 @@ class UserAdmin(BaseUserAdmin):
     """
     Custom admin interface for User model.
     """
-    list_display = ['email', 'first_name', 'last_name', 'role', 'department', 'is_active', 'azure_ad_status_display', 'azure_ad_last_sync']
-    list_filter = ['role', 'is_active', 'is_staff', 'department', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
-    search_fields = ['email', 'first_name', 'last_name', 'department', 'azure_ad_object_id']
+    list_display = ['email', 'first_name', 'last_name', 'role', 'department', 'employee_id', 'is_active', 'azure_ad_status_display', 'date_joined']
+    list_filter = ['role', 'is_active', 'is_staff', 'department', 'employee_type', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
+    search_fields = ['email', 'first_name', 'last_name', 'employee_id', 'azure_ad_object_id']
     ordering = ['email']
     
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('Personal info'), {'fields': ('first_name', 'last_name', 'phone_number', 'profile_picture')}),
-        (_('Organization'), {'fields': ('role', 'department', 'job_title')}),
+        (_('Employment Information'), {
+            'fields': ('role', 'company_name', 'department', 'job_title', 'employee_id', 'employee_type', 'manager', 'office_location')
+        }),
+        (_('Employment Dates'), {
+            'fields': ('hire_date', 'start_date', 'end_date'),
+            'classes': ('collapse',)
+        }),
         (_('Azure AD Integration'), {
             'fields': ('azure_ad_object_id', 'azure_ad_sync_enabled', 'azure_ad_sync_status', 'azure_ad_last_sync', 'azure_ad_sync_error'),
             'classes': ('collapse',)
@@ -50,6 +56,14 @@ class UserAdmin(BaseUserAdmin):
             'classes': ('wide',),
             'fields': ('email', 'first_name', 'last_name', 'role', 'password1', 'password2'),
         }),
+        (_('Employment Information'), {
+            'classes': ('wide',),
+            'fields': ('company_name', 'department', 'job_title', 'employee_id', 'employee_type', 'manager', 'office_location'),
+        }),
+        (_('Employment Dates'), {
+            'classes': ('wide',),
+            'fields': ('hire_date', 'start_date', 'end_date'),
+        }),
     )
     
     readonly_fields = ['date_joined', 'last_login', 'azure_ad_object_id', 'azure_ad_last_sync']
@@ -61,7 +75,7 @@ class UserAdmin(BaseUserAdmin):
         enable_azure_ad_sync,
         disable_azure_ad_sync,
         remove_azure_ad_link,
-        test_azure_ad_connection,
+        test_azure_ad_connection
     ]
     
     def azure_ad_status_display(self, obj):
@@ -75,7 +89,6 @@ class UserAdmin(BaseUserAdmin):
             'failed': 'red',
             'disabled': 'gray'
         }
-        
         status_icons = {
             'synced': '✅',
             'pending': '⏳',
@@ -83,34 +96,27 @@ class UserAdmin(BaseUserAdmin):
             'disabled': '🚫'
         }
         
-        color = status_colors.get(obj.azure_ad_sync_status, 'black')
         icon = status_icons.get(obj.azure_ad_sync_status, '❓')
+        color = status_colors.get(obj.azure_ad_sync_status, 'black')
+        status_text = obj.get_azure_ad_sync_status_display()
         
-        status_text = f"{icon} {obj.azure_ad_sync_status.title()}"
-        
-        # Add error tooltip for failed status
-        if obj.azure_ad_sync_status == 'failed' and obj.azure_ad_sync_error:
-            status_text = format_html(
-                '<span style="color: {};" title="{}">{}</span>',
-                color,
-                obj.azure_ad_sync_error,
-                status_text
-            )
-        else:
-            status_text = format_html('<span style="color: {};">{}</span>', color, status_text)
-        
-        # Add Azure AD Object ID if available
+        # Add Azure AD Object ID indicator
+        azure_id_indicator = ""
         if obj.azure_ad_object_id:
-            status_text = format_html(
-                '{}<br><small style="color: gray;">ID: {}</small>',
-                status_text,
-                obj.azure_ad_object_id[:8] + '...'
-            )
+            azure_id_indicator = f" <small>(ID: {obj.azure_ad_object_id[:8]}...)</small>"
         
-        return status_text
+        # Add error indicator if there's a sync error
+        error_indicator = ""
+        if obj.azure_ad_sync_error:
+            error_indicator = f' <span title="{obj.azure_ad_sync_error}" style="color: red;">⚠️</span>'
+        
+        return format_html(
+            '<span style="color: {};">{} {}</span>{}{}',
+            color, icon, status_text, azure_id_indicator, error_indicator
+        )
     
     azure_ad_status_display.short_description = 'Azure AD Status'
-    azure_ad_status_display.allow_tags = True
+    azure_ad_status_display.admin_order_field = 'azure_ad_sync_status'
 
 
 @admin.register(UserSession)
