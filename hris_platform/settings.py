@@ -22,18 +22,22 @@ import socket
 import subprocess
 
 def get_server_ip():
-    """Get the server's IP address for ALLOWED_HOSTS"""
+    """Get the server's IP address for ALLOWED_HOSTS (prioritize internal IP for self-hosted deployment)"""
+    
+    # For self-hosted applications, prioritize internal/private IP addresses
     try:
-        # Try to get external IP first
-        result = subprocess.run(['curl', '-s', '-4', 'ifconfig.me'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
+        # Method 1: Socket method (gets internal IP used for outbound connections)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        # Prefer this internal IP for self-hosted deployments
+        return ip
     except:
         pass
     
     try:
-        # Get internal IP via routing table
+        # Method 2: Get internal IP via routing table
         result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], 
                               capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
@@ -46,14 +50,18 @@ def get_server_ip():
         pass
     
     try:
-        # Fallback to socket method
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        # Method 3: Only try external IP as last resort (for public deployments)
+        # Note: This is commented out to prioritize internal IPs for self-hosted tools
+        # Uncomment if you need external IP detection for public-facing deployments
+        # result = subprocess.run(['curl', '-s', '-4', 'ifconfig.me'], 
+        #                       capture_output=True, text=True, timeout=5)
+        # if result.returncode == 0 and result.stdout.strip():
+        #     return result.stdout.strip()
+        pass
     except:
-        return None
+        pass
+    
+    return None
 
 # Base allowed hosts from environment
 allowed_hosts = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0').split(',')

@@ -66,12 +66,22 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
    ```
 
 3. **Access your D.A.N.I platform**
-   - **Main Application**: http://YOUR_VM_IP:8000/
-   - **Admin Panel**: http://YOUR_VM_IP:8000/admin/
-   - **API Docs**: http://YOUR_VM_IP:8000/api/
+   The setup will display your access URLs automatically. You can also access:
+   
+   **For Local Development:**
+   - **Main Application**: http://localhost:8000/
+   - **Admin Panel**: http://localhost:8000/admin/
+   - **API Docs**: http://localhost:8000/api/
+   
+   **For Server Deployment:**
+   - **Main Application**: http://YOUR_SERVER_IP:8000/
+   - **Admin Panel**: http://YOUR_SERVER_IP:8000/admin/
+   - **API Docs**: http://YOUR_SERVER_IP:8000/api/
+   
+   💡 **Tip**: The `make init` command will automatically detect and display your server's IP address
 
 4. **Login with default admin account**
-   - **Email**: `admin@dani.local`
+   - **Email**: `admin@hris.local`
    - **Password**: `admin123`
    - ⚠️ **Change this password immediately after first login!**
 
@@ -85,7 +95,19 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
 ✅ Time-off management  
 ✅ Azure AD integration ready  
 ✅ Microsoft Sentinel integration
-✅ REST API with documentation  
+✅ REST API with documentation
+
+### 🔧 Deployment Scenarios
+
+| Scenario | Command | Best For |
+|----------|---------|----------|
+| **Local Development** | `make init` | Testing, development, learning |
+| **Quick Server Deploy** | `make init` | Quick production setup |
+| **Production with Nginx** | `make up-prod` | High-traffic production |
+| **Development with Tools** | `make up-tools` | Development with pgAdmin/Redis tools |
+| **HTTPS/SSL Production** | `make up-https` | Production with domain & SSL |
+
+💡 **Most users should start with `make init` - it works for both local and server deployment!**  
 
 ### Troubleshooting Quick Start
 If you encounter issues:
@@ -108,7 +130,11 @@ docker-compose down -v && docker-compose up -d --build
 **Common fixes:**
 - Docker permissions: `sudo usermod -aG docker $USER && newgrp docker`
 - Missing directories: `mkdir -p logs media staticfiles && chmod 755 logs media staticfiles`
-- Port conflicts: Use ports 5433 (postgres) and 6380 (redis)
+- Port conflicts: External ports used are 8000 (web), 5433 (postgres), and 6380 (redis)
+- Network issues: Check that your firewall allows access to port 8000
+- **Container name conflicts**: Run `make clean` then `make init` to restart fresh
+- **Stuck containers**: If containers won't remove, run `docker rm -f $(docker ps -aq --filter "name=hris_")` then `make init`
+- **IP detection issues**: If setup shows `http://:8000/`, use `http://localhost:8000/` instead
 
 ---
 
@@ -143,37 +169,49 @@ sudo apt install make -y
    cd dani-platform
    ```
 
-2. **Create production environment file**
+2. **Configure environment settings**
    ```bash
+   # Copy the environment template
    cp .env.example .env
+   
+   # Edit the environment file
    nano .env
    ```
    
-   Update with production values:
+   **Essential production settings to update:**
    ```bash
-   # Django Production Settings
+   # Security Settings (REQUIRED for production)
    DEBUG=False
    SECRET_KEY=your-super-secure-secret-key-here
    ALLOWED_HOSTS=your-domain.com,www.your-domain.com,your-server-ip
    
-   # Database (secure passwords)
+   # Database Security (RECOMMENDED)
    DB_PASSWORD=your-secure-database-password
    
-   # Email Configuration
+   # Admin Credentials (Change after first login)
+   SUPERUSER_EMAIL=admin@hris.local
+   SUPERUSER_PASSWORD=admin123
+   
+   # Email Configuration (OPTIONAL - for notifications)
    EMAIL_HOST=smtp.gmail.com
    EMAIL_PORT=587
    EMAIL_USE_TLS=True
    EMAIL_HOST_USER=your-email@company.com
    EMAIL_HOST_PASSWORD=your-app-password
    
-   # Security
+   # SSL/HTTPS Settings (For production with domain)
    SECURE_SSL_REDIRECT=True
    SECURE_HSTS_SECONDS=31536000
    ```
+   
+   💡 **Quick Setup**: For testing, you can use the default `.env.example` settings
 
 3. **Deploy the platform**
    ```bash
-   # Initialize with production profile
+   # Option 1: Quick deployment (recommended)
+   make init
+   
+   # Option 2: Manual production deployment
    make clean
    make up-prod
    
@@ -183,7 +221,7 @@ sudo apt install make -y
    # Run migrations
    make migrate
    
-   # Create admin user
+   # Create admin user (if not using make init)
    make createsuperuser
    ```
 

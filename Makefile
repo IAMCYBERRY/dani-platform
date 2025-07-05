@@ -174,7 +174,7 @@ init:
 	docker-compose exec web python manage.py shell -c "from accounts.models import User; User.objects.filter(email='admin@hris.local').exists() or User.objects.create_superuser(email='admin@hris.local', password='admin123', first_name='System', last_name='Administrator', role='admin')"
 	@echo "\n🎉 Setup complete!"
 	@echo "🌐 Access your D.A.N.I platform:"
-	@VM_IP=$$(curl -s -4 ifconfig.me 2>/dev/null || ip route get 8.8.8.8 | awk '{print $$7; exit}' 2>/dev/null || hostname -I | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -1 || echo "localhost"); \
+	@VM_IP=$$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2>/dev/null || python -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2>/dev/null || ifconfig | grep 'inet ' | grep -v '127.0.0.1' | head -1 | awk '{print $$2}' 2>/dev/null || echo "localhost"); \
 	echo "   Main app: http://$$VM_IP:8000/"; \
 	echo "   Admin:    http://$$VM_IP:8000/admin/"
 	@echo "🔐 Default credentials:"
