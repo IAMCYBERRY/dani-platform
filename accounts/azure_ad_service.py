@@ -166,13 +166,53 @@ class AzureADService:
             "userPrincipalName": user.email,
             "givenName": user.first_name,
             "surname": user.last_name,
-            "jobTitle": user.job_title or "",
-            "department": user.department or "",
             "passwordProfile": {
                 "forceChangePasswordNextSignIn": True,
                 "password": temp_password
             }
         }
+        
+        # Add job title if present and valid (1-128 characters)
+        if user.job_title and len(user.job_title.strip()) > 0:
+            job_title = user.job_title.strip()
+            if len(job_title) <= 128:
+                azure_user_data["jobTitle"] = job_title
+            else:
+                azure_user_data["jobTitle"] = job_title[:128]  # Truncate to 128 chars
+        
+        # Add department if present
+        if user.department:
+            azure_user_data["department"] = str(user.department)
+        
+        # Add company name if present
+        if user.company_name:
+            azure_user_data["companyName"] = user.company_name
+        
+        # Add employee ID if present
+        if user.employee_id:
+            azure_user_data["employeeId"] = user.employee_id
+        
+        # Add employee type if present
+        if user.employee_type:
+            azure_user_data["employeeType"] = user.get_employee_type_display()
+        
+        # Add office location if present
+        if user.office_location:
+            azure_user_data["officeLocation"] = user.office_location
+        
+        # Add manager if present
+        if user.manager and user.manager.azure_ad_object_id:
+            azure_user_data["manager"] = user.manager.azure_ad_object_id
+        
+        # Add employment dates if present
+        if user.hire_date:
+            azure_user_data["employeeHireDate"] = user.hire_date.isoformat()
+        if user.start_date:
+            # Azure AD doesn't have a direct start date field, use extension attribute
+            azure_user_data["extensionAttribute1"] = user.start_date.isoformat()
+        if user.end_date:
+            # Azure AD doesn't have a direct end date field, use extension attribute
+            azure_user_data["extensionAttribute2"] = user.end_date.isoformat()
         
         # Add phone number if available
         if user.phone_number:
@@ -185,6 +225,9 @@ class AzureADService:
             user.azure_ad_object_id = result.get("id")
             user.azure_ad_sync_status = "synced"
             user.azure_ad_last_sync = django_timezone.now()
+            # Clear any previous sync error
+            if hasattr(user, 'azure_ad_sync_error'):
+                user.azure_ad_sync_error = ""
             user.save()
             
             logger.info(f"Successfully created Azure AD user for {user.email}")
@@ -194,8 +237,11 @@ class AzureADService:
                 "message": "User created successfully in Azure AD"
             }
         else:
-            # Update sync status to failed
+            # Update sync status to failed and save error details
             user.azure_ad_sync_status = "failed"
+            error_msg = result.get('error', str(result))
+            if hasattr(user, 'azure_ad_sync_error'):
+                user.azure_ad_sync_error = error_msg
             user.save()
             
             logger.error(f"Failed to create Azure AD user for {user.email}: {result}")
@@ -217,9 +263,47 @@ class AzureADService:
             "displayName": user.get_full_name(),
             "givenName": user.first_name,
             "surname": user.last_name,
-            "jobTitle": user.job_title or "",
-            "department": user.department or "",
         }
+        
+        # Add job title if present and valid (1-128 characters)
+        if user.job_title and len(user.job_title.strip()) > 0:
+            job_title = user.job_title.strip()
+            if len(job_title) <= 128:
+                update_data["jobTitle"] = job_title
+            else:
+                update_data["jobTitle"] = job_title[:128]  # Truncate to 128 chars
+        
+        # Add department if present
+        if user.department:
+            update_data["department"] = str(user.department)
+        
+        # Add company name if present
+        if user.company_name:
+            update_data["companyName"] = user.company_name
+        
+        # Add employee ID if present
+        if user.employee_id:
+            update_data["employeeId"] = user.employee_id
+        
+        # Add employee type if present
+        if user.employee_type:
+            update_data["employeeType"] = user.get_employee_type_display()
+        
+        # Add office location if present
+        if user.office_location:
+            update_data["officeLocation"] = user.office_location
+        
+        # Add manager if present
+        if user.manager and user.manager.azure_ad_object_id:
+            update_data["manager"] = user.manager.azure_ad_object_id
+        
+        # Add employment dates if present
+        if user.hire_date:
+            update_data["employeeHireDate"] = user.hire_date.isoformat()
+        if user.start_date:
+            update_data["extensionAttribute1"] = user.start_date.isoformat()
+        if user.end_date:
+            update_data["extensionAttribute2"] = user.end_date.isoformat()
         
         # Add phone number if available
         if user.phone_number:
@@ -236,12 +320,18 @@ class AzureADService:
         if success:
             user.azure_ad_sync_status = "synced"
             user.azure_ad_last_sync = django_timezone.now()
+            # Clear any previous sync error
+            if hasattr(user, 'azure_ad_sync_error'):
+                user.azure_ad_sync_error = ""
             user.save()
             
             logger.info(f"Successfully updated Azure AD user for {user.email}")
             return True, {"message": "User updated successfully in Azure AD"}
         else:
             user.azure_ad_sync_status = "failed"
+            error_msg = result.get('error', str(result))
+            if hasattr(user, 'azure_ad_sync_error'):
+                user.azure_ad_sync_error = error_msg
             user.save()
             
             logger.error(f"Failed to update Azure AD user for {user.email}: {result}")
@@ -346,12 +436,12 @@ class AzureADService:
         """
         Test the connection to Microsoft Graph API.
         """
-        success, result = self._make_graph_request("GET", "me")
+        success, result = self._make_graph_request("GET", "organization")
         
         if success:
             return True, {
                 "message": "Successfully connected to Microsoft Graph API",
-                "service_principal": result
+                "organization_info": result
             }
         else:
             return False, {

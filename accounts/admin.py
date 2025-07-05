@@ -12,6 +12,15 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.contrib import messages
 from .models import User, UserSession, PasswordResetToken, AzureADSettings
+from .azure_ad_admin_actions import (
+    sync_users_to_azure_ad,
+    force_sync_users_to_azure_ad,
+    reset_sync_status_to_pending,
+    disable_azure_ad_sync,
+    enable_azure_ad_sync,
+    remove_azure_ad_link,
+    test_azure_ad_connection
+)
 
 
 @admin.register(User)
@@ -19,17 +28,23 @@ class UserAdmin(BaseUserAdmin):
     """
     Custom admin interface for User model.
     """
-    list_display = ['email', 'first_name', 'last_name', 'role', 'department', 'is_active', 'azure_ad_sync_status', 'date_joined']
-    list_filter = ['role', 'is_active', 'is_staff', 'department', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
-    search_fields = ['email', 'first_name', 'last_name', 'department', 'azure_ad_object_id']
+    list_display = ['email', 'first_name', 'last_name', 'role', 'department', 'employee_id', 'is_active', 'azure_ad_status_display', 'date_joined']
+    list_filter = ['role', 'is_active', 'is_staff', 'department', 'employee_type', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
+    search_fields = ['email', 'first_name', 'last_name', 'employee_id', 'azure_ad_object_id']
     ordering = ['email']
     
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         (_('Personal info'), {'fields': ('first_name', 'last_name', 'phone_number', 'profile_picture')}),
-        (_('Organization'), {'fields': ('role', 'department', 'job_title')}),
+        (_('Employment Information'), {
+            'fields': ('role', 'company_name', 'department', 'job_title', 'employee_id', 'employee_type', 'manager', 'office_location')
+        }),
+        (_('Employment Dates'), {
+            'fields': ('hire_date', 'start_date', 'end_date'),
+            'classes': ('collapse',)
+        }),
         (_('Azure AD Integration'), {
-            'fields': ('azure_ad_object_id', 'azure_ad_sync_enabled', 'azure_ad_sync_status', 'azure_ad_last_sync'),
+            'fields': ('azure_ad_object_id', 'azure_ad_sync_enabled', 'azure_ad_sync_status', 'azure_ad_last_sync', 'azure_ad_sync_error'),
             'classes': ('collapse',)
         }),
         (_('Permissions'), {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -41,37 +56,64 @@ class UserAdmin(BaseUserAdmin):
             'classes': ('wide',),
             'fields': ('email', 'first_name', 'last_name', 'role', 'password1', 'password2'),
         }),
+        (_('Employment Information'), {
+            'classes': ('wide',),
+            'fields': ('company_name', 'department', 'job_title', 'employee_id', 'employee_type', 'manager', 'office_location'),
+        }),
+        (_('Employment Dates'), {
+            'classes': ('wide',),
+            'fields': ('hire_date', 'start_date', 'end_date'),
+        }),
     )
     
     readonly_fields = ['date_joined', 'last_login', 'azure_ad_object_id', 'azure_ad_last_sync']
     
-    actions = ['sync_to_azure_ad', 'disable_azure_sync', 'enable_azure_sync']
+    actions = [
+        sync_users_to_azure_ad,
+        force_sync_users_to_azure_ad,
+        reset_sync_status_to_pending,
+        enable_azure_ad_sync,
+        disable_azure_ad_sync,
+        remove_azure_ad_link,
+        test_azure_ad_connection
+    ]
     
-    def sync_to_azure_ad(self, request, queryset):
-        """Admin action to sync selected users to Azure AD."""
-        from .tasks import sync_user_to_azure_ad
+    def azure_ad_status_display(self, obj):
+        """Display Azure AD sync status with visual indicators."""
+        status_colors = {
+            'synced': 'green',
+            'pending': 'orange', 
+            'failed': 'red',
+            'disabled': 'gray'
+        }
+        status_icons = {
+            'synced': '✅',
+            'pending': '⏳',
+            'failed': '❌',
+            'disabled': '🚫'
+        }
         
-        synced_count = 0
-        for user in queryset:
-            if user.azure_ad_sync_enabled:
-                action = 'update' if user.azure_ad_object_id else 'create'
-                sync_user_to_azure_ad.delay(user.id, action)
-                synced_count += 1
+        icon = status_icons.get(obj.azure_ad_sync_status, '❓')
+        color = status_colors.get(obj.azure_ad_sync_status, 'black')
+        status_text = obj.get_azure_ad_sync_status_display()
         
-        self.message_user(request, f"Queued {synced_count} users for Azure AD sync.")
-    sync_to_azure_ad.short_description = "Sync selected users to Azure AD"
+        # Add Azure AD Object ID indicator
+        azure_id_indicator = ""
+        if obj.azure_ad_object_id:
+            azure_id_indicator = f" <small>(ID: {obj.azure_ad_object_id[:8]}...)</small>"
+        
+        # Add error indicator if there's a sync error
+        error_indicator = ""
+        if obj.azure_ad_sync_error:
+            error_indicator = f' <span title="{obj.azure_ad_sync_error}" style="color: red;">⚠️</span>'
+        
+        return format_html(
+            '<span style="color: {};">{} {}</span>{}{}',
+            color, icon, status_text, azure_id_indicator, error_indicator
+        )
     
-    def disable_azure_sync(self, request, queryset):
-        """Admin action to disable Azure AD sync for selected users."""
-        updated = queryset.update(azure_ad_sync_enabled=False, azure_ad_sync_status='disabled')
-        self.message_user(request, f"Disabled Azure AD sync for {updated} users.")
-    disable_azure_sync.short_description = "Disable Azure AD sync"
-    
-    def enable_azure_sync(self, request, queryset):
-        """Admin action to enable Azure AD sync for selected users."""
-        updated = queryset.update(azure_ad_sync_enabled=True, azure_ad_sync_status='pending')
-        self.message_user(request, f"Enabled Azure AD sync for {updated} users.")
-    enable_azure_sync.short_description = "Enable Azure AD sync"
+    azure_ad_status_display.short_description = 'Azure AD Status'
+    azure_ad_status_display.admin_order_field = 'azure_ad_sync_status'
 
 
 @admin.register(UserSession)
