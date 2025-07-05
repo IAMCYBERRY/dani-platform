@@ -33,7 +33,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(
         unique=True,
         validators=[EmailValidator()],
-        help_text='Email address used for login'
+        help_text='Username/UPN for login and Azure AD User Principal Name'
+    )
+    business_email = models.EmailField(
+        blank=True,
+        validators=[EmailValidator()],
+        help_text='Business email address (populates Azure AD email property)'
     )
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
@@ -69,8 +74,41 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     
     # Organization context
-    department = models.CharField(max_length=100, blank=True)
+    department = models.ForeignKey(
+        'employees.Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users'
+    )
     job_title = models.CharField(max_length=100, blank=True)
+    
+    # Additional employee information for Azure AD sync
+    company_name = models.CharField(max_length=100, blank=True, help_text='Company or organization name')
+    employee_id = models.CharField(max_length=50, blank=True, unique=True, null=True, help_text='Unique employee identifier')
+    employee_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('full_time', 'Full Time'),
+            ('part_time', 'Part Time'),
+            ('contractor', 'Contractor'),
+            ('intern', 'Intern'),
+            ('temporary', 'Temporary'),
+        ],
+        blank=True,
+        help_text='Employment type'
+    )
+    hire_date = models.DateField(blank=True, null=True, help_text='Employee hire date')
+    office_location = models.CharField(max_length=100, blank=True, help_text='Primary office or work location')
+    manager = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='user_direct_reports',
+        limit_choices_to={'role__in': ['admin', 'hr_manager', 'hiring_manager']},
+        help_text='Direct manager or supervisor'
+    )
     
     # Azure AD integration fields
     azure_ad_object_id = models.CharField(

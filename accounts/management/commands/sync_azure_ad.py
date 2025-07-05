@@ -88,9 +88,8 @@ class Command(BaseCommand):
             self.stdout.write("   ⏭️  Skipping (sync disabled for user)")
             return
         
-        if user.azure_ad_object_id and not force:
-            self.stdout.write("   ⏭️  Skipping (already synced, use --force to override)")
-            return
+        # Note: We now use intelligent sync that handles both create and update automatically
+        # The force flag is still used to override sync_enabled=False
         
         if dry_run:
             self.stdout.write("   🏃 Would sync this user (dry run)")

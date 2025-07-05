@@ -55,13 +55,17 @@ def sync_user_to_azure_ad(self, user_id: int, action: str = 'create') -> Dict[st
     
     try:
         if action == 'create':
-            success, result = azure_ad_service.create_user(user)
+            # Use intelligent sync that automatically chooses create or update
+            success, result = azure_ad_service.sync_user_from_hris(user, force_create=True)
         elif action == 'update':
             success, result = azure_ad_service.update_user(user)
         elif action == 'disable':
             success, result = azure_ad_service.disable_user(user)
         elif action == 'delete':
             success, result = azure_ad_service.delete_user(user)
+        elif action == 'sync':
+            # New action: intelligent sync (create or update as needed)
+            success, result = azure_ad_service.sync_user_from_hris(user, force_create=True)
         else:
             logger.error(f"Invalid action: {action}")
             return {
@@ -212,11 +216,8 @@ def sync_failed_users_retry() -> Dict[str, Any]:
     
     for user in failed_users:
         try:
-            # Determine action based on current state
-            if user.azure_ad_object_id:
-                action = 'update'
-            else:
-                action = 'create'
+            # Use intelligent sync action that handles both create and update
+            action = 'sync'
             
             # Queue retry task
             sync_user_to_azure_ad.delay(user.id, action)

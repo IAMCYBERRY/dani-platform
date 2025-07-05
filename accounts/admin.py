@@ -28,15 +28,19 @@ class UserAdmin(BaseUserAdmin):
     """
     Custom admin interface for User model.
     """
-    list_display = ['email', 'first_name', 'last_name', 'role', 'department', 'is_active', 'azure_ad_status_display', 'azure_ad_last_sync']
+    list_display = ['email', 'business_email', 'first_name', 'last_name', 'role', 'department', 'is_active', 'azure_ad_status_display', 'azure_ad_last_sync']
     list_filter = ['role', 'is_active', 'is_staff', 'department', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
-    search_fields = ['email', 'first_name', 'last_name', 'department', 'azure_ad_object_id']
+    search_fields = ['email', 'business_email', 'first_name', 'last_name', 'department', 'azure_ad_object_id']
     ordering = ['email']
     
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
+        (None, {'fields': ('email', 'business_email', 'password')}),
         (_('Personal info'), {'fields': ('first_name', 'last_name', 'phone_number', 'profile_picture')}),
-        (_('Organization'), {'fields': ('role', 'department', 'job_title')}),
+        (_('Organization'), {'fields': ('role', 'department', 'job_title', 'manager')}),
+        (_('Employment Details'), {
+            'fields': ('company_name', 'employee_id', 'employee_type', 'hire_date', 'office_location'),
+            'classes': ('collapse',)
+        }),
         (_('Azure AD Integration'), {
             'fields': ('azure_ad_object_id', 'azure_ad_sync_enabled', 'azure_ad_sync_status', 'azure_ad_last_sync', 'azure_ad_sync_error'),
             'classes': ('collapse',)
@@ -48,7 +52,11 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'first_name', 'last_name', 'role', 'password1', 'password2'),
+            'fields': ('email', 'business_email', 'first_name', 'last_name', 'role', 'password1', 'password2'),
+        }),
+        (_('Employment Details'), {
+            'classes': ('wide',),
+            'fields': ('department', 'job_title', 'company_name', 'employee_id', 'employee_type', 'hire_date', 'office_location', 'manager'),
         }),
     )
     

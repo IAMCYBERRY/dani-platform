@@ -163,7 +163,8 @@ class AzureADService:
             "accountEnabled": user.is_active,
             "displayName": user.get_full_name(),
             "mailNickname": user.email.split('@')[0],
-            "userPrincipalName": user.email,
+            "userPrincipalName": user.email,  # Use email field for UPN
+            "mail": user.business_email if user.business_email else user.email,  # Use business_email for Azure AD email, fallback to email
             "givenName": user.first_name,
             "surname": user.last_name,
             "passwordProfile": {
@@ -181,16 +182,41 @@ class AzureADService:
                 azure_user_data["jobTitle"] = job_title[:128]  # Truncate to 128 chars
         
         # Add department if present and valid
-        if user.department and len(user.department.strip()) > 0:
-            department = user.department.strip()
-            if len(department) <= 64:  # Department field limit in Azure AD
-                azure_user_data["department"] = department
-            else:
-                azure_user_data["department"] = department[:64]  # Truncate to 64 chars
+        if user.department:
+            department_name = user.department.name.strip() if user.department.name else ""
+            if len(department_name) > 0:
+                if len(department_name) <= 64:  # Department field limit in Azure AD
+                    azure_user_data["department"] = department_name
+                else:
+                    azure_user_data["department"] = department_name[:64]  # Truncate to 64 chars
         
         # Add phone number if available
         if user.phone_number:
             azure_user_data["businessPhones"] = [user.phone_number]
+        
+        # Add company name if available
+        if user.company_name:
+            azure_user_data["companyName"] = user.company_name.strip()[:64]  # Azure AD limit
+        
+        # Add employee ID if available
+        if user.employee_id:
+            azure_user_data["employeeId"] = user.employee_id.strip()[:16]  # Azure AD limit
+        
+        # Add employee type if available
+        if user.employee_type:
+            azure_user_data["employeeType"] = user.get_employee_type_display()
+        
+        # Add hire date if available
+        if user.hire_date:
+            azure_user_data["employeeHireDate"] = user.hire_date.isoformat()
+        
+        # Add office location if available
+        if user.office_location:
+            azure_user_data["officeLocation"] = user.office_location.strip()[:128]  # Azure AD limit
+        
+        # Add manager if available
+        if user.manager:
+            azure_user_data["manager"] = user.manager.email  # Reference by UPN/email
         
         success, result = self._make_graph_request("POST", "users", azure_user_data)
         
@@ -237,6 +263,7 @@ class AzureADService:
         update_data = {
             "accountEnabled": user.is_active,
             "displayName": user.get_full_name(),
+            "mail": user.business_email if user.business_email else user.email,  # Use business_email for Azure AD email, fallback to email
             "givenName": user.first_name,
             "surname": user.last_name,
         }
@@ -250,18 +277,43 @@ class AzureADService:
                 update_data["jobTitle"] = job_title[:128]  # Truncate to 128 chars
         
         # Add department if present and valid
-        if user.department and len(user.department.strip()) > 0:
-            department = user.department.strip()
-            if len(department) <= 64:  # Department field limit in Azure AD
-                update_data["department"] = department
-            else:
-                update_data["department"] = department[:64]  # Truncate to 64 chars
+        if user.department:
+            department_name = user.department.name.strip() if user.department.name else ""
+            if len(department_name) > 0:
+                if len(department_name) <= 64:  # Department field limit in Azure AD
+                    update_data["department"] = department_name
+                else:
+                    update_data["department"] = department_name[:64]  # Truncate to 64 chars
         
         # Add phone number if available
         if user.phone_number:
             update_data["businessPhones"] = [user.phone_number]
         else:
             update_data["businessPhones"] = []
+        
+        # Add company name if available
+        if user.company_name:
+            update_data["companyName"] = user.company_name.strip()[:64]  # Azure AD limit
+        
+        # Add employee ID if available
+        if user.employee_id:
+            update_data["employeeId"] = user.employee_id.strip()[:16]  # Azure AD limit
+        
+        # Add employee type if available
+        if user.employee_type:
+            update_data["employeeType"] = user.get_employee_type_display()
+        
+        # Add hire date if available
+        if user.hire_date:
+            update_data["employeeHireDate"] = user.hire_date.isoformat()
+        
+        # Add office location if available
+        if user.office_location:
+            update_data["officeLocation"] = user.office_location.strip()[:128]  # Azure AD limit
+        
+        # Add manager if available
+        if user.manager:
+            update_data["manager"] = user.manager.email  # Reference by UPN/email
         
         success, result = self._make_graph_request(
             "PATCH", 

@@ -635,7 +635,7 @@ sudo ufw enable
 POST /api/accounts/azure-ad/sync/user/{id}/
 Content-Type: application/json
 {
-  "action": "create",  # or "update", "disable", "delete"
+  "action": "sync",  # or "create", "update", "disable", "delete" - "sync" is intelligent create/update
   "force": false
 }
 
@@ -643,7 +643,7 @@ Content-Type: application/json
 POST /api/accounts/azure-ad/sync/bulk/
 {
   "user_ids": [1, 2, 3],
-  "action": "create"
+  "action": "sync"  # intelligent sync (default) - creates new or updates existing users
 }
 
 # Get sync dashboard

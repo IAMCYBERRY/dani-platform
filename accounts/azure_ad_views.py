@@ -50,11 +50,11 @@ def sync_user_to_azure(request, user_id):
         )
     
     user = get_object_or_404(User, id=user_id)
-    action = request.data.get('action', 'create')
+    action = request.data.get('action', 'sync')  # Default to intelligent sync
     force = request.data.get('force', False)
     
     # Validate action
-    valid_actions = ['create', 'update', 'disable', 'delete']
+    valid_actions = ['create', 'update', 'disable', 'delete', 'sync']
     if action not in valid_actions:
         return Response(
             {'error': f'Invalid action. Must be one of: {", ".join(valid_actions)}'},
@@ -123,10 +123,10 @@ def bulk_sync_users(request):
         )
     
     user_ids = request.data.get('user_ids')
-    action = request.data.get('action', 'create')
+    action = request.data.get('action', 'sync')  # Default to intelligent sync
     
     # Validate action
-    valid_actions = ['create', 'update', 'disable', 'delete']
+    valid_actions = ['create', 'update', 'disable', 'delete', 'sync']
     if action not in valid_actions:
         return Response(
             {'error': f'Invalid action. Must be one of: {", ".join(valid_actions)}'},
