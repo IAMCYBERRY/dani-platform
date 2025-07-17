@@ -16,6 +16,7 @@ router.register(r'jobs', views.JobPostingViewSet, basename='jobposting')
 router.register(r'applicants', views.ApplicantViewSet, basename='applicant')
 router.register(r'interviews', views.InterviewViewSet, basename='interview')
 router.register(r'offers', views.JobOffermentViewSet, basename='jobofferment')
+router.register(r'powerapps-configs', views.PowerAppsConfigurationViewSet, basename='powerappsconfig')
 
 urlpatterns = [
     # Include router URLs
@@ -23,4 +24,8 @@ urlpatterns = [
     
     # Additional endpoints
     path('dashboard/', views.recruitment_dashboard, name='dashboard'),
+    
+    # PowerApps integration
+    path('powerapps/<str:api_key>/', views.powerapps_submission, name='powerapps_submission'),
+    path('powerapps-wizard/', views.powerapps_wizard, name='powerapps_wizard'),
 ]

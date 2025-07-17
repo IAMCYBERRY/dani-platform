@@ -12,6 +12,15 @@ from django.db.models import Q, Count, Avg
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+from django.core.files.base import ContentFile
+from django.shortcuts import render
+import json
+import base64
+import uuid
+import logging
 
 from accounts.permissions import (
     IsHRManagerOrAdmin,
@@ -20,7 +29,7 @@ from accounts.permissions import (
     JobApplicationPermission,
     IsCandidateOrAdmin
 )
-from .models import JobPosting, Applicant, Interview, JobOfferment
+from .models import JobPosting, Applicant, Interview, JobOfferment, PowerAppsConfiguration
 from .serializers import (
     JobPostingSerializer,
     JobPostingListSerializer,
@@ -28,7 +37,9 @@ from .serializers import (
     ApplicantListSerializer,
     InterviewSerializer,
     InterviewListSerializer,
-    JobOffermentSerializer
+    JobOffermentSerializer,
+    PowerAppsConfigurationSerializer,
+    PowerAppsConfigurationListSerializer
 )
 
 
@@ -508,6 +519,246 @@ class JobOffermentViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class PowerAppsConfigurationViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing PowerApps configurations.
+    """
+    permission_classes = [IsHRManagerOrAdmin]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'auto_assign_to_job']
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at', 'last_submission_date', 'total_submissions']
+    ordering = ['-created_at']
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return PowerAppsConfigurationListSerializer
+        return PowerAppsConfigurationSerializer
+    
+    def get_queryset(self):
+        """Filter PowerApps configurations based on user role."""
+        user = self.request.user
+        queryset = PowerAppsConfiguration.objects.select_related(
+            'created_by', 'auto_assign_to_job'
+        )
+        
+        if user.is_admin or user.is_hr_manager:
+            return queryset
+        else:
+            # Only show configurations created by the user
+            return queryset.filter(created_by=user)
+    
+    @action(detail=True, methods=['post'])
+    def regenerate_api_key(self, request, pk=None):
+        """Regenerate API key for PowerApps configuration."""
+        configuration = self.get_object()
+        
+        import secrets
+        import string
+        
+        # Generate new unique API key
+        while True:
+            new_api_key = 'dani_powerapps_' + ''.join(
+                secrets.choice(string.ascii_lowercase + string.digits) 
+                for _ in range(32)
+            )
+            if not PowerAppsConfiguration.objects.filter(api_key=new_api_key).exists():
+                break
+        
+        old_api_key = configuration.api_key
+        configuration.api_key = new_api_key
+        configuration.save()
+        
+        return Response({
+            'success': True,
+            'message': 'API key regenerated successfully',
+            'old_api_key': old_api_key[:20] + '...',  # Partial for security
+            'new_api_key': new_api_key,
+            'endpoint_url': request.build_absolute_uri(
+                f'/api/recruitment/powerapps/{new_api_key}/'
+            )
+        })
+    
+    @action(detail=True, methods=['post'])
+    def test_webhook(self, request, pk=None):
+        """Test webhook URL for PowerApps configuration."""
+        configuration = self.get_object()
+        
+        if not configuration.webhook_url:
+            return Response(
+                {'error': 'No webhook URL configured'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        import requests
+        
+        test_payload = {
+            'event': 'test',
+            'configuration_id': configuration.id,
+            'configuration_name': configuration.name,
+            'timestamp': timezone.now().isoformat(),
+            'test_data': {
+                'firstName': 'Test',
+                'lastName': 'User',
+                'email': 'test@example.com'
+            }
+        }
+        
+        try:
+            response = requests.post(
+                configuration.webhook_url,
+                json=test_payload,
+                timeout=10,
+                headers={'Content-Type': 'application/json'}
+            )
+            response.raise_for_status()
+            
+            return Response({
+                'success': True,
+                'message': 'Webhook test successful',
+                'response_status': response.status_code,
+                'response_data': response.text[:200] if response.text else None
+            })
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Webhook test failed: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def field_mapping_templates(self, request, pk=None):
+        """Get field mapping templates for common use cases."""
+        templates = {
+            'basic_application': {
+                'name': 'Basic Job Application',
+                'description': 'Standard job application form fields',
+                'field_mapping': {
+                    'firstName': 'first_name',
+                    'lastName': 'last_name',
+                    'emailAddress': 'email',
+                    'phoneNumber': 'phone',
+                    'currentLocation': 'current_location',
+                    'yearsOfExperience': 'years_of_experience',
+                    'currentSalary': 'current_salary',
+                    'expectedSalary': 'expected_salary',
+                    'linkedInUrl': 'linkedin_url',
+                    'portfolioUrl': 'portfolio_url',
+                    'willingToRelocate': 'willing_to_relocate',
+                    'availableStartDate': 'available_start_date'
+                },
+                'required_fields': ['firstName', 'lastName', 'emailAddress', 'resume_file']
+            },
+            'executive_application': {
+                'name': 'Executive Application',
+                'description': 'Application form for executive positions',
+                'field_mapping': {
+                    'firstName': 'first_name',
+                    'lastName': 'last_name',
+                    'emailAddress': 'email',
+                    'phoneNumber': 'phone',
+                    'currentLocation': 'current_location',
+                    'yearsOfExperience': 'years_of_experience',
+                    'currentCompany': 'current_company',
+                    'currentTitle': 'current_title',
+                    'currentSalary': 'current_salary',
+                    'expectedSalary': 'expected_salary',
+                    'linkedInUrl': 'linkedin_url',
+                    'executiveBio': 'executive_bio',
+                    'leadershipExperience': 'leadership_experience',
+                    'boardExperience': 'board_experience'
+                },
+                'required_fields': ['firstName', 'lastName', 'emailAddress', 'currentCompany', 'resume_file']
+            },
+            'technical_application': {
+                'name': 'Technical Application',
+                'description': 'Application form for technical positions',
+                'field_mapping': {
+                    'firstName': 'first_name',
+                    'lastName': 'last_name',
+                    'emailAddress': 'email',
+                    'phoneNumber': 'phone',
+                    'currentLocation': 'current_location',
+                    'yearsOfExperience': 'years_of_experience',
+                    'technicalSkills': 'technical_skills',
+                    'programmingLanguages': 'programming_languages',
+                    'frameworks': 'frameworks',
+                    'githubUrl': 'github_url',
+                    'portfolioUrl': 'portfolio_url',
+                    'certifications': 'certifications',
+                    'educationLevel': 'education_level'
+                },
+                'required_fields': ['firstName', 'lastName', 'emailAddress', 'technicalSkills', 'resume_file']
+            }
+        }
+        
+        return Response(templates)
+    
+    @action(detail=False, methods=['get'])
+    def setup_wizard_data(self, request):
+        """Get data needed for the PowerApps setup wizard."""
+        from employees.models import Department
+        
+        wizard_data = {
+            'job_postings': [
+                {
+                    'id': job.id,
+                    'title': job.title,
+                    'department': job.department.name if job.department else None,
+                    'status': job.status
+                }
+                for job in JobPosting.objects.filter(
+                    status__in=[JobPosting.Status.ACTIVE, JobPosting.Status.DRAFT]
+                ).select_related('department')
+            ],
+            'departments': [
+                {
+                    'id': dept.id,
+                    'name': dept.name
+                }
+                for dept in Department.objects.all()
+            ],
+            'default_field_mapping': {
+                'firstName': 'first_name',
+                'lastName': 'last_name',
+                'emailAddress': 'email',
+                'phoneNumber': 'phone',
+                'currentLocation': 'current_location',
+                'yearsOfExperience': 'years_of_experience',
+                'currentSalary': 'current_salary',
+                'expectedSalary': 'expected_salary',
+                'linkedInUrl': 'linkedin_url',
+                'portfolioUrl': 'portfolio_url',
+                'willingToRelocate': 'willing_to_relocate',
+                'availableStartDate': 'available_start_date'
+            },
+            'default_required_fields': ['firstName', 'lastName', 'emailAddress', 'resume_file'],
+            'default_allowed_file_types': ['pdf', 'doc', 'docx'],
+            'default_allowed_origins': [
+                'https://apps.powerapps.com',
+                'https://apps.preview.powerapps.com',
+                'https://make.powerapps.com',
+                'https://prod-00.westus.logic.azure.com',
+                'https://prod-01.westus.logic.azure.com',
+                'https://prod-02.westus.logic.azure.com',
+                'https://prod-03.westus.logic.azure.com',
+                'https://prod-04.westus.logic.azure.com',
+                'https://prod-05.westus.logic.azure.com'
+            ]
+        }
+        
+        return Response(wizard_data)
+
+
+@api_view(['GET'])
+@permission_classes([IsHRManagerOrAdmin])
+def powerapps_wizard(request):
+    """
+    Render the PowerApps configuration wizard interface.
+    """
+    return render(request, 'recruitment/powerapps_wizard.html')
+
+
 @api_view(['GET'])
 @permission_classes([IsHRManagerOrAdmin])
 def recruitment_dashboard(request):
@@ -573,3 +824,401 @@ def recruitment_dashboard(request):
         }
     
     return Response(stats)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def powerapps_submission(request, api_key):
+    """
+    API endpoint for PowerApps form submissions.
+    
+    Receives job application data from PowerApps forms and creates
+    Applicant records in the DANI HRIS system.
+    """
+    
+    # Set up logging for this operation
+    logger = logging.getLogger('dani.powerapps')
+    operation_id = f"powerapps_{uuid.uuid4().hex[:8]}"
+    
+    logger.info(f"[{operation_id}] PowerApps submission received", extra={
+        'api_key': api_key[:10] + '...',
+        'content_type': request.content_type,
+        'content_length': request.META.get('CONTENT_LENGTH', 0)
+    })
+    
+    try:
+        # Find and validate PowerApps configuration
+        try:
+            config = PowerAppsConfiguration.objects.get(
+                api_key=api_key,
+                status=PowerAppsConfiguration.Status.ACTIVE
+            )
+        except PowerAppsConfiguration.DoesNotExist:
+            logger.warning(f"[{operation_id}] Invalid API key: {api_key}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key or configuration inactive',
+                'operation_id': operation_id
+            }, status=401)
+        
+        # Parse request data
+        try:
+            if request.content_type == 'application/json':
+                form_data = json.loads(request.body)
+            else:
+                form_data = dict(request.POST)
+                # Handle file uploads
+                if request.FILES:
+                    for field_name, file_obj in request.FILES.items():
+                        form_data[field_name] = file_obj
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"[{operation_id}] Invalid request data: {e}")
+            config.increment_submission_count(successful=False)
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid request data format',
+                'operation_id': operation_id
+            }, status=400)
+        
+        # Validate required fields
+        missing_fields = config.validate_required_fields(form_data)
+        if missing_fields:
+            logger.warning(f"[{operation_id}] Missing required fields: {missing_fields}")
+            config.increment_submission_count(successful=False)
+            return JsonResponse({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}',
+                'missing_fields': missing_fields,
+                'operation_id': operation_id
+            }, status=400)
+        
+        # Transform form data to DANI format
+        applicant_data = config.transform_form_data(form_data)
+        
+        # Validate email domain if restrictions are set
+        if config.allowed_email_domains:
+            email = applicant_data.get('email', '')
+            email_domain = email.split('@')[-1].lower() if '@' in email else ''
+            if email_domain not in [domain.lower() for domain in config.allowed_email_domains]:
+                logger.warning(f"[{operation_id}] Email domain not allowed: {email_domain}")
+                config.increment_submission_count(successful=False)
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Email domain "{email_domain}" is not allowed',
+                    'operation_id': operation_id
+                }, status=400)
+        
+        # Check for duplicate applications if enabled
+        if config.enable_duplicate_detection and config.auto_assign_to_job:
+            existing_applicant = Applicant.objects.filter(
+                email=applicant_data.get('email'),
+                job=config.auto_assign_to_job
+            ).first()
+            
+            if existing_applicant:
+                logger.warning(f"[{operation_id}] Duplicate application detected: {applicant_data.get('email')}")
+                config.increment_submission_count(successful=False)
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Duplicate application detected',
+                    'existing_application_id': existing_applicant.id,
+                    'operation_id': operation_id
+                }, status=409)
+        
+        # Process file uploads
+        resume_file = None
+        cover_letter_file = None
+        
+        if config.resume_field_name in form_data:
+            resume_file = process_file_upload(
+                form_data[config.resume_field_name],
+                config.max_file_size_mb,
+                config.allowed_file_types,
+                'resume'
+            )
+        
+        if config.cover_letter_field_name and config.cover_letter_field_name in form_data:
+            cover_letter_file = process_file_upload(
+                form_data[config.cover_letter_field_name],
+                config.max_file_size_mb,
+                config.allowed_file_types,
+                'cover_letter'
+            )
+        
+        # Create Applicant record
+        try:
+            applicant = Applicant.objects.create(
+                first_name=applicant_data.get('first_name', ''),
+                last_name=applicant_data.get('last_name', ''),
+                email=applicant_data.get('email', ''),
+                phone=applicant_data.get('phone', ''),
+                job=config.auto_assign_to_job,
+                source=config.default_application_source,
+                resume=resume_file,
+                cover_letter=cover_letter_file,
+                current_location=applicant_data.get('current_location', ''),
+                years_of_experience=applicant_data.get('years_of_experience'),
+                current_salary=applicant_data.get('current_salary'),
+                expected_salary=applicant_data.get('expected_salary'),
+                linkedin_url=applicant_data.get('linkedin_url', ''),
+                portfolio_url=applicant_data.get('portfolio_url', ''),
+                willing_to_relocate=applicant_data.get('willing_to_relocate', False),
+                available_start_date=applicant_data.get('available_start_date'),
+                screening_responses=form_data  # Store original form data
+            )
+            
+            logger.info(f"[{operation_id}] Applicant created successfully: {applicant.id}")
+            
+        except Exception as e:
+            logger.error(f"[{operation_id}] Failed to create applicant: {e}")
+            config.increment_submission_count(successful=False)
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to create application record',
+                'operation_id': operation_id
+            }, status=500)
+        
+        # Send confirmation email if enabled
+        if config.auto_send_confirmation:
+            try:
+                send_application_confirmation_email(applicant, config)
+                logger.info(f"[{operation_id}] Confirmation email sent to: {applicant.email}")
+            except Exception as e:
+                logger.warning(f"[{operation_id}] Failed to send confirmation email: {e}")
+        
+        # Send notification emails
+        if config.notification_emails:
+            try:
+                send_new_application_notification(applicant, config)
+                logger.info(f"[{operation_id}] Notification emails sent")
+            except Exception as e:
+                logger.warning(f"[{operation_id}] Failed to send notification emails: {e}")
+        
+        # Call webhook if configured
+        if config.webhook_url:
+            try:
+                call_webhook(config.webhook_url, applicant, operation_id)
+                logger.info(f"[{operation_id}] Webhook called successfully")
+            except Exception as e:
+                logger.warning(f"[{operation_id}] Webhook call failed: {e}")
+        
+        # Update configuration statistics
+        config.increment_submission_count(successful=True)
+        
+        # Return success response
+        response_data = {
+            'success': True,
+            'message': 'Application submitted successfully',
+            'applicant_id': applicant.id,
+            'operation_id': operation_id,
+            'job_title': config.auto_assign_to_job.title if config.auto_assign_to_job else None
+        }
+        
+        logger.info(f"[{operation_id}] PowerApps submission completed successfully")
+        return JsonResponse(response_data, status=201)
+        
+    except Exception as e:
+        logger.error(f"[{operation_id}] Unexpected error in PowerApps submission: {e}", exc_info=True)
+        try:
+            config.increment_submission_count(successful=False)
+        except:
+            pass  # Don't fail if we can't update stats
+        
+        return JsonResponse({
+            'success': False,
+            'error': 'Internal server error',
+            'operation_id': operation_id
+        }, status=500)
+
+
+def process_file_upload(file_data, max_size_mb, allowed_types, file_type):
+    """
+    Process file upload from PowerApps form.
+    
+    Args:
+        file_data: File data (base64 encoded string or file object)
+        max_size_mb: Maximum file size in MB
+        allowed_types: List of allowed file extensions
+        file_type: Type of file ('resume' or 'cover_letter')
+    
+    Returns:
+        ContentFile object for saving to model
+    """
+    try:
+        if isinstance(file_data, str):
+            # Handle base64 encoded file
+            if ';base64,' in file_data:
+                header, encoded = file_data.split(';base64,')
+                file_content = base64.b64decode(encoded)
+                
+                # Extract file extension from header
+                if 'data:application/pdf' in header:
+                    file_ext = 'pdf'
+                elif 'application/msword' in header:
+                    file_ext = 'doc'
+                elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in header:
+                    file_ext = 'docx'
+                else:
+                    file_ext = 'pdf'  # Default
+            else:
+                # Assume plain base64
+                file_content = base64.b64decode(file_data)
+                file_ext = 'pdf'  # Default
+        else:
+            # Handle uploaded file object
+            file_content = file_data.read()
+            file_ext = file_data.name.split('.')[-1].lower() if '.' in file_data.name else 'pdf'
+        
+        # Validate file size
+        file_size_mb = len(file_content) / (1024 * 1024)
+        if file_size_mb > max_size_mb:
+            raise ValueError(f"File size ({file_size_mb:.1f}MB) exceeds maximum allowed ({max_size_mb}MB)")
+        
+        # Validate file type
+        if allowed_types and file_ext not in allowed_types:
+            raise ValueError(f"File type '{file_ext}' not allowed. Allowed types: {allowed_types}")
+        
+        # Create filename
+        filename = f"{file_type}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        
+        return ContentFile(file_content, name=filename)
+        
+    except Exception as e:
+        raise ValueError(f"Failed to process {file_type} file: {e}")
+
+
+def send_application_confirmation_email(applicant, config):
+    """
+    Send confirmation email to applicant.
+    
+    Args:
+        applicant: Applicant instance
+        config: PowerAppsConfiguration instance
+    """
+    from django.core.mail import send_mail
+    from django.template import Template, Context
+    
+    try:
+        # Use custom template if provided, otherwise use default
+        if config.confirmation_email_template:
+            template = Template(config.confirmation_email_template)
+        else:
+            template = Template("""
+            Dear {{ applicant.first_name }},
+            
+            Thank you for your application for the {{ job_title }} position.
+            
+            We have received your application and our team will review it shortly.
+            You will hear from us within the next few business days.
+            
+            Application Details:
+            - Name: {{ applicant.full_name }}
+            - Email: {{ applicant.email }}
+            - Job: {{ job_title }}
+            - Submitted: {{ applicant.applied_at }}
+            
+            Best regards,
+            {{ company_name }} Recruitment Team
+            """)
+        
+        context = Context({
+            'applicant': applicant,
+            'job_title': applicant.job.title if applicant.job else 'Unknown Position',
+            'company_name': 'DANI HRIS'  # Could be configurable
+        })
+        
+        email_content = template.render(context)
+        
+        send_mail(
+            subject=f"Application Received - {applicant.job.title if applicant.job else 'Job Application'}",
+            message=email_content,
+            from_email=None,  # Use default from settings
+            recipient_list=[applicant.email],
+            fail_silently=False
+        )
+        
+    except Exception as e:
+        raise Exception(f"Failed to send confirmation email: {e}")
+
+
+def send_new_application_notification(applicant, config):
+    """
+    Send notification emails to HR team about new application.
+    
+    Args:
+        applicant: Applicant instance
+        config: PowerAppsConfiguration instance
+    """
+    from django.core.mail import send_mail
+    
+    try:
+        if not config.notification_emails:
+            return
+        
+        subject = f"New Application: {applicant.full_name} - {applicant.job.title if applicant.job else 'Unknown Position'}"
+        
+        message = f"""
+        A new job application has been received through PowerApps.
+        
+        Applicant Details:
+        - Name: {applicant.full_name}
+        - Email: {applicant.email}
+        - Phone: {applicant.phone}
+        - Position: {applicant.job.title if applicant.job else 'Unknown Position'}
+        - Source: {applicant.source}
+        - Submitted: {applicant.applied_at}
+        
+        Please log into the DANI HRIS system to review this application.
+        
+        Configuration: {config.name}
+        """
+        
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=None,  # Use default from settings
+            recipient_list=config.notification_emails,
+            fail_silently=False
+        )
+        
+    except Exception as e:
+        raise Exception(f"Failed to send notification emails: {e}")
+
+
+def call_webhook(webhook_url, applicant, operation_id):
+    """
+    Call configured webhook with application data.
+    
+    Args:
+        webhook_url: Webhook URL to call
+        applicant: Applicant instance
+        operation_id: Operation identifier for logging
+    """
+    import requests
+    
+    try:
+        webhook_data = {
+            'event': 'new_application',
+            'operation_id': operation_id,
+            'applicant': {
+                'id': applicant.id,
+                'name': applicant.full_name,
+                'email': applicant.email,
+                'phone': applicant.phone,
+                'job_title': applicant.job.title if applicant.job else None,
+                'source': applicant.source,
+                'applied_at': applicant.applied_at.isoformat()
+            }
+        }
+        
+        response = requests.post(
+            webhook_url,
+            json=webhook_data,
+            timeout=10,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        response.raise_for_status()
+        
+    except Exception as e:
+        raise Exception(f"Webhook call failed: {e}")

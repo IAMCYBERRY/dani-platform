@@ -19,7 +19,9 @@ from .azure_ad_admin_actions import (
     disable_azure_ad_sync,
     enable_azure_ad_sync,
     remove_azure_ad_link,
-    test_azure_ad_connection
+    test_azure_ad_connection,
+    sync_all_users_to_azure_ad,
+    sync_individual_user_now
 )
 
 
@@ -28,15 +30,15 @@ class UserAdmin(BaseUserAdmin):
     """
     Custom admin interface for User model.
     """
-    list_display = ['email', 'business_email', 'first_name', 'last_name', 'role', 'department', 'is_active', 'azure_ad_status_display', 'azure_ad_last_sync']
-    list_filter = ['role', 'is_active', 'is_staff', 'department', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
+    list_display = ['email', 'business_email', 'first_name', 'last_name', 'role', 'department', 'is_manager', 'is_active', 'azure_ad_status_display', 'azure_ad_last_sync']
+    list_filter = ['role', 'is_active', 'is_staff', 'is_manager', 'department', 'azure_ad_sync_status', 'azure_ad_sync_enabled', 'date_joined']
     search_fields = ['email', 'business_email', 'first_name', 'last_name', 'department', 'azure_ad_object_id']
     ordering = ['email']
     
     fieldsets = (
         (None, {'fields': ('email', 'business_email', 'password')}),
         (_('Personal info'), {'fields': ('first_name', 'last_name', 'phone_number', 'profile_picture')}),
-        (_('Organization'), {'fields': ('role', 'department', 'job_title', 'manager')}),
+        (_('Organization'), {'fields': ('role', 'department', 'job_title', 'is_manager', 'manager')}),
         (_('Employment Details'), {
             'fields': ('company_name', 'employee_id', 'employee_type', 'hire_date', 'office_location'),
             'classes': ('collapse',)
@@ -56,7 +58,7 @@ class UserAdmin(BaseUserAdmin):
         }),
         (_('Employment Details'), {
             'classes': ('wide',),
-            'fields': ('department', 'job_title', 'company_name', 'employee_id', 'employee_type', 'hire_date', 'office_location', 'manager'),
+            'fields': ('department', 'job_title', 'is_manager', 'manager', 'company_name', 'employee_id', 'employee_type', 'hire_date', 'office_location'),
         }),
     )
     
@@ -64,6 +66,8 @@ class UserAdmin(BaseUserAdmin):
     
     actions = [
         sync_users_to_azure_ad,
+        sync_individual_user_now,
+        sync_all_users_to_azure_ad,
         force_sync_users_to_azure_ad,
         reset_sync_status_to_pending,
         enable_azure_ad_sync,
@@ -151,7 +155,7 @@ class AzureADSettingsAdmin(admin.ModelAdmin):
     Admin interface for Azure AD Settings.
     """
     list_display = ['enabled', 'sync_enabled', 'connection_status', 'last_test_date', 'updated_at']
-    readonly_fields = ['connection_status', 'last_test_date', 'test_error_message', 'created_at', 'updated_at', 'updated_by']
+    readonly_fields = ['connection_status', 'last_test_date', 'test_error_message', 'last_automatic_sync', 'created_at', 'updated_at', 'updated_by']
     
     fieldsets = (
         (_('Basic Configuration'), {
@@ -161,6 +165,11 @@ class AzureADSettingsAdmin(admin.ModelAdmin):
         (_('Sync Settings'), {
             'fields': ('sync_enabled', 'sync_on_user_create', 'sync_on_user_update', 'sync_on_user_disable'),
             'description': 'Configure when users should be automatically synchronized to Azure AD.'
+        }),
+        (_('Automatic Sync Scheduling'), {
+            'fields': ('enable_automatic_sync', 'sync_interval_hours', 'last_automatic_sync'),
+            'classes': ('collapse',),
+            'description': 'Configure automatic periodic synchronization of all users.'
         }),
         (_('Advanced Settings'), {
             'fields': ('authority', 'scope', 'default_password_length'),

@@ -8,7 +8,7 @@ including job postings, applications, interviews, and offers.
 from rest_framework import serializers
 from django.utils import timezone
 from django.utils.text import slugify
-from .models import JobPosting, Applicant, Interview, JobOfferment
+from .models import JobPosting, Applicant, Interview, JobOfferment, PowerAppsConfiguration
 
 
 class JobPostingSerializer(serializers.ModelSerializer):
@@ -398,3 +398,118 @@ class JobOffermentSerializer(serializers.ModelSerializer):
                 instance.responded_at = timezone.now()
         
         return super().update(instance, validated_data)
+
+
+class PowerAppsConfigurationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for PowerApps Configuration model.
+    """
+    created_by_name = serializers.CharField(
+        source='created_by.get_full_name', 
+        read_only=True
+    )
+    auto_assign_to_job_title = serializers.CharField(
+        source='auto_assign_to_job.title', 
+        read_only=True
+    )
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    success_rate = serializers.ReadOnlyField()
+    days_since_last_submission = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = PowerAppsConfiguration
+        fields = [
+            'id', 'name', 'description', 'status', 'status_display', 'api_key',
+            'auto_assign_to_job', 'auto_assign_to_job_title', 'allowed_origins',
+            'field_mapping', 'required_fields', 'resume_field_name', 
+            'cover_letter_field_name', 'max_file_size_mb', 'allowed_file_types',
+            'default_application_source', 'allowed_email_domains', 
+            'require_email_verification', 'enable_duplicate_detection',
+            'auto_send_confirmation', 'confirmation_email_template',
+            'notification_emails', 'rate_limit_per_hour', 'custom_validation_rules',
+            'webhook_url', 'total_submissions', 'successful_submissions',
+            'success_rate', 'last_submission_date', 'days_since_last_submission',
+            'created_by', 'created_by_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'api_key', 'total_submissions', 'successful_submissions',
+            'success_rate', 'last_submission_date', 'days_since_last_submission',
+            'created_by', 'created_at', 'updated_at'
+        ]
+    
+    def validate_field_mapping(self, value):
+        """Validate field mapping JSON structure."""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Field mapping must be a JSON object.")
+        return value
+    
+    def validate_required_fields(self, value):
+        """Validate required fields list."""
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Required fields must be a list.")
+        return value
+    
+    def validate_allowed_file_types(self, value):
+        """Validate allowed file types list."""
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Allowed file types must be a list.")
+        
+        valid_extensions = ['pdf', 'doc', 'docx', 'txt', 'rtf']
+        for ext in value:
+            if ext not in valid_extensions:
+                raise serializers.ValidationError(
+                    f"'{ext}' is not a valid file extension. "
+                    f"Allowed: {', '.join(valid_extensions)}"
+                )
+        return value
+    
+    def validate_rate_limit_per_hour(self, value):
+        """Validate rate limit is reasonable."""
+        if value < 1 or value > 1000:
+            raise serializers.ValidationError(
+                "Rate limit must be between 1 and 1000 submissions per hour."
+            )
+        return value
+    
+    def create(self, validated_data):
+        """Create PowerApps configuration with API key generation."""
+        import secrets
+        import string
+        
+        # Generate unique API key
+        while True:
+            api_key = 'dani_powerapps_' + ''.join(
+                secrets.choice(string.ascii_lowercase + string.digits) 
+                for _ in range(32)
+            )
+            if not PowerAppsConfiguration.objects.filter(api_key=api_key).exists():
+                break
+        
+        validated_data['api_key'] = api_key
+        
+        # Set created_by from request user
+        request = self.context.get('request')
+        if request and request.user:
+            validated_data['created_by'] = request.user
+        
+        return super().create(validated_data)
+
+
+class PowerAppsConfigurationListSerializer(serializers.ModelSerializer):
+    """
+    Simplified serializer for PowerApps configuration listings.
+    """
+    auto_assign_to_job_title = serializers.CharField(
+        source='auto_assign_to_job.title', 
+        read_only=True
+    )
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    success_rate = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = PowerAppsConfiguration
+        fields = [
+            'id', 'name', 'status', 'status_display', 'auto_assign_to_job_title',
+            'total_submissions', 'successful_submissions', 'success_rate',
+            'last_submission_date', 'created_at'
+        ]

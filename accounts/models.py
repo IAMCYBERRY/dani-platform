@@ -100,13 +100,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     hire_date = models.DateField(blank=True, null=True, help_text='Employee hire date')
     office_location = models.CharField(max_length=100, blank=True, help_text='Primary office or work location')
+    is_manager = models.BooleanField(
+        default=False,
+        help_text='Designates whether this user can be assigned as a manager to other users'
+    )
     manager = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='user_direct_reports',
-        limit_choices_to={'role__in': ['admin', 'hr_manager', 'hiring_manager']},
+        limit_choices_to={'is_manager': True, 'is_active': True},
         help_text='Direct manager or supervisor'
     )
     
@@ -331,6 +335,21 @@ class AzureADSettings(models.Model):
     default_password_length = models.PositiveIntegerField(
         default=12,
         help_text='Default password length for new Azure AD users'
+    )
+    
+    # Automatic sync scheduling
+    enable_automatic_sync = models.BooleanField(
+        default=False,
+        help_text='Enable automatic periodic synchronization of all users'
+    )
+    sync_interval_hours = models.PositiveIntegerField(
+        default=24,
+        help_text='Interval in hours between automatic sync operations'
+    )
+    last_automatic_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Last time automatic sync was performed'
     )
     
     # Test results

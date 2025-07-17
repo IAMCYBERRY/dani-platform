@@ -7,7 +7,7 @@ from django.contrib.admin import action
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from accounts.azure_ad_service import azure_ad_service
-from accounts.models import AzureADSettings
+from accounts.models import AzureADSettings, User
 
 
 @action(description="🔄 Sync selected users to Azure AD")
@@ -169,3 +169,90 @@ def test_azure_ad_connection(modeladmin, request, queryset):
         error_msg = result.get('error', 'Unknown error')
         details = result.get('details', '')
         messages.error(request, f"❌ Azure AD connection failed: {error_msg} - {details}")
+
+
+@action(description="🔄 Sync ALL users to Azure AD")
+def sync_all_users_to_azure_ad(modeladmin, request, queryset):
+    """Sync ALL users in the system to Azure AD (not just selected ones)."""
+    
+    # Check if Azure AD is configured
+    settings = AzureADSettings.get_settings()
+    if not settings.is_configured:
+        messages.error(request, "❌ Azure AD is not configured. Please configure Azure AD settings first.")
+        return
+    
+    if not settings.enabled or not settings.sync_enabled:
+        messages.error(request, "❌ Azure AD sync is disabled. Please enable it in Azure AD settings.")
+        return
+    
+    # Get all users with sync enabled
+    all_users = User.objects.filter(azure_ad_sync_enabled=True, is_active=True)
+    total_users = all_users.count()
+    
+    if total_users == 0:
+        messages.warning(request, "⚠️  No users found with Azure AD sync enabled.")
+        return
+    
+    # Confirmation check - only process if less than 50 users for safety
+    if total_users > 50:
+        messages.error(request, f"❌ Too many users ({total_users}) for bulk sync. Please use selective sync for safety.")
+        return
+    
+    success_count = 0
+    error_count = 0
+    
+    messages.info(request, f"🔄 Starting sync of {total_users} users...")
+    
+    for user in all_users:
+        # Attempt to sync
+        success, result = azure_ad_service.sync_user_from_hris(user, force_create=True)
+        
+        if success:
+            success_count += 1
+        else:
+            error_count += 1
+    
+    # Show summary results
+    if success_count > 0:
+        messages.success(request, f"✅ Successfully synced {success_count} of {total_users} users to Azure AD")
+    
+    if error_count > 0:
+        messages.error(request, f"❌ Failed to sync {error_count} users")
+
+
+@action(description="👤 Sync individual user now")
+def sync_individual_user_now(modeladmin, request, queryset):
+    """Immediate sync for individual users."""
+    
+    # Check if Azure AD is configured
+    settings = AzureADSettings.get_settings()
+    if not settings.is_configured:
+        messages.error(request, "❌ Azure AD is not configured.")
+        return
+    
+    if not settings.enabled or not settings.sync_enabled:
+        messages.error(request, "❌ Azure AD sync is disabled.")
+        return
+    
+    # Limit to single user for individual sync
+    if queryset.count() > 1:
+        messages.error(request, "❌ Please select only one user for individual sync.")
+        return
+    
+    user = queryset.first()
+    if not user.azure_ad_sync_enabled:
+        messages.error(request, f"❌ Azure AD sync is disabled for {user.email}")
+        return
+    
+    # Attempt to sync
+    success, result = azure_ad_service.sync_user_from_hris(user, force_create=True)
+    
+    if success:
+        temp_password = result.get('temporary_password', '')
+        if temp_password:
+            messages.success(request, f"✅ {user.email} synced successfully! Temporary password: {temp_password}")
+        else:
+            messages.success(request, f"✅ {user.email} updated successfully in Azure AD")
+    else:
+        error_msg = result.get('error', 'Unknown error')
+        messages.error(request, f"❌ Failed to sync {user.email}: {error_msg}")

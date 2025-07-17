@@ -41,7 +41,7 @@ class JobPosting(models.Model):
     
     # Basic job information
     title = models.CharField(max_length=200)
-    slug = models.SlugField(max_length=220, unique=True)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
     description = models.TextField(help_text='Detailed job description')
     requirements = models.TextField(help_text='Job requirements and qualifications')
     responsibilities = models.TextField(help_text='Key responsibilities')
@@ -148,7 +148,21 @@ class JobPosting(models.Model):
         return 0
     
     def save(self, *args, **kwargs):
-        """Set published_at when status changes to active."""
+        """Set published_at when status changes to active and auto-generate slug."""
+        # Auto-generate slug if not provided
+        if not self.slug and self.title:
+            from django.utils.text import slugify
+            base_slug = slugify(self.title)
+            slug = base_slug
+            counter = 1
+            # Exclude current instance when checking for duplicates
+            existing_slugs = JobPosting.objects.exclude(pk=self.pk).values_list('slug', flat=True)
+            while slug in existing_slugs:
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        
+        # Set published_at when status changes to active
         if self.status == self.Status.ACTIVE and not self.published_at:
             self.published_at = timezone.now()
         super().save(*args, **kwargs)
@@ -307,6 +321,8 @@ class Applicant(models.Model):
     @property
     def days_in_pipeline(self):
         """Calculate days since application."""
+        if not self.applied_at:
+            return 0
         return (timezone.now() - self.applied_at).days
 
 
@@ -448,6 +464,8 @@ class Interview(models.Model):
     @property
     def scheduled_datetime(self):
         """Return combined datetime for the interview."""
+        if not self.scheduled_date or not self.scheduled_time:
+            return None
         return timezone.datetime.combine(
             self.scheduled_date,
             self.scheduled_time
@@ -456,6 +474,8 @@ class Interview(models.Model):
     @property
     def is_upcoming(self):
         """Check if interview is scheduled for the future."""
+        if not self.scheduled_datetime:
+            return False
         return (
             self.status == self.Status.SCHEDULED and
             self.scheduled_datetime > timezone.now()
@@ -548,9 +568,235 @@ class JobOfferment(models.Model):
     @property
     def is_expired(self):
         """Check if offer has expired."""
+        if not self.offer_expiry_date:
+            return False
         return timezone.now().date() > self.offer_expiry_date
     
     @property
     def days_until_expiry(self):
         """Calculate days until offer expires."""
+        if not self.offer_expiry_date:
+            return 0
         return (self.offer_expiry_date - timezone.now().date()).days
+
+
+class PowerAppsConfiguration(models.Model):
+    """
+    Configuration for PowerApps form integration with DANI HRIS recruitment.
+    
+    This model stores settings for connecting PowerApps forms to the DANI recruitment
+    system, including field mappings, authentication, and workflow settings.
+    """
+    
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Active'
+        INACTIVE = 'inactive', 'Inactive'
+        TESTING = 'testing', 'Testing'
+    
+    # Basic configuration
+    name = models.CharField(
+        max_length=100, 
+        help_text="Configuration name for identification"
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description of this PowerApps integration"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.INACTIVE,
+        help_text="Current status of this configuration"
+    )
+    
+    # API connection details
+    api_key = models.CharField(
+        max_length=255,
+        unique=True,
+        blank=True,
+        help_text="Unique API key for PowerApps authentication"
+    )
+    allowed_origins = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Allowed origins for CORS (PowerApps URLs)"
+    )
+    
+    # Form field mapping
+    field_mapping = models.JSONField(
+        default=dict,
+        help_text="JSON mapping of PowerApps form fields to DANI applicant fields"
+    )
+    required_fields = models.JSONField(
+        default=list,
+        help_text="List of required PowerApps form fields"
+    )
+    
+    # File handling
+    resume_field_name = models.CharField(
+        max_length=100,
+        default='resume_file',
+        help_text="PowerApps field name for resume upload"
+    )
+    cover_letter_field_name = models.CharField(
+        max_length=100,
+        default='cover_letter_file',
+        blank=True,
+        help_text="PowerApps field name for cover letter upload"
+    )
+    max_file_size_mb = models.PositiveIntegerField(
+        default=10,
+        help_text="Maximum file size in MB for uploaded files"
+    )
+    allowed_file_types = models.JSONField(
+        default=list,
+        help_text="Allowed file extensions (e.g., ['pdf', 'doc', 'docx'])"
+    )
+    
+    # Job assignment
+    auto_assign_to_job = models.ForeignKey(
+        JobPosting,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Automatically assign applications to this job posting"
+    )
+    default_application_source = models.CharField(
+        max_length=50,
+        default='PowerApps Form',
+        help_text="Default source to assign to applications from this form"
+    )
+    
+    # Validation and security
+    allowed_email_domains = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Restrict applications to specific email domains"
+    )
+    require_email_verification = models.BooleanField(
+        default=False,
+        help_text="Require email verification before processing application"
+    )
+    enable_duplicate_detection = models.BooleanField(
+        default=True,
+        help_text="Prevent duplicate applications based on email and job"
+    )
+    
+    # Workflow settings
+    auto_send_confirmation = models.BooleanField(
+        default=True,
+        help_text="Automatically send confirmation email to applicants"
+    )
+    confirmation_email_template = models.TextField(
+        blank=True,
+        help_text="Custom email template for application confirmations"
+    )
+    notification_emails = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Email addresses to notify when new applications arrive"
+    )
+    
+    # Advanced settings
+    rate_limit_per_hour = models.PositiveIntegerField(
+        default=100,
+        help_text="Maximum applications per hour from this configuration"
+    )
+    custom_validation_rules = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Custom validation rules for form data"
+    )
+    webhook_url = models.URLField(
+        blank=True,
+        help_text="Optional webhook URL to call after successful application submission"
+    )
+    
+    # Tracking and analytics
+    total_submissions = models.PositiveIntegerField(
+        default=0,
+        help_text="Total number of applications received through this configuration"
+    )
+    successful_submissions = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of successfully processed applications"
+    )
+    last_submission_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date and time of last application submission"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='created_powerapps_configs',
+        help_text="User who created this configuration"
+    )
+    
+    class Meta:
+        db_table = 'powerapps_configurations'
+        verbose_name = 'PowerApps Configuration'
+        verbose_name_plural = 'PowerApps Configurations'
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['api_key']),
+            models.Index(fields=['auto_assign_to_job']),
+        ]
+    
+    def __str__(self):
+        status_display = self.get_status_display()
+        return f"PowerApps Config: {self.name} ({status_display})"
+    
+    @property
+    def is_active(self):
+        """Check if configuration is active."""
+        return self.status == self.Status.ACTIVE
+    
+    @property
+    def success_rate(self):
+        """Calculate success rate percentage."""
+        if self.total_submissions == 0:
+            return 0
+        return (self.successful_submissions / self.total_submissions) * 100
+    
+    def get_api_endpoint_url(self, request=None):
+        """Get the full API endpoint URL for PowerApps integration."""
+        if request:
+            return request.build_absolute_uri(f'/api/recruitment/powerapps/{self.api_key}/')
+        return f'/api/recruitment/powerapps/{self.api_key}/'
+    
+    def increment_submission_count(self, successful=True):
+        """Increment submission counters."""
+        self.total_submissions += 1
+        if successful:
+            self.successful_submissions += 1
+        self.last_submission_date = timezone.now()
+        self.save(update_fields=['total_submissions', 'successful_submissions', 'last_submission_date'])
+    
+    def validate_required_fields(self, form_data):
+        """Validate that all required fields are present in form data."""
+        missing_fields = []
+        for field in self.required_fields:
+            if field not in form_data or not form_data[field]:
+                missing_fields.append(field)
+        return missing_fields
+    
+    def transform_form_data(self, powerapps_data):
+        """Transform PowerApps form data to DANI applicant format."""
+        transformed_data = {}
+        
+        for powerapps_field, dani_field in self.field_mapping.items():
+            if powerapps_field in powerapps_data:
+                transformed_data[dani_field] = powerapps_data[powerapps_field]
+        
+        # Add default values
+        if self.auto_assign_to_job:
+            transformed_data['job'] = self.auto_assign_to_job.id
+        
+        transformed_data['source'] = self.default_application_source
+        
+        return transformed_data

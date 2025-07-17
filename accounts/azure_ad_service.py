@@ -215,8 +215,12 @@ class AzureADService:
             azure_user_data["officeLocation"] = user.office_location.strip()[:128]  # Azure AD limit
         
         # Add manager if available
-        if user.manager:
-            azure_user_data["manager"] = user.manager.email  # Reference by UPN/email
+        if user.manager and user.manager.azure_ad_object_id:
+            # Use proper Microsoft Graph API format for manager reference
+            azure_user_data["manager@odata.bind"] = f"https://graph.microsoft.com/v1.0/users/{user.manager.azure_ad_object_id}"
+            logger.info(f"Setting manager for {user.email}: {user.manager.email} (Azure ID: {user.manager.azure_ad_object_id})")
+        elif user.manager and not user.manager.azure_ad_object_id:
+            logger.warning(f"Manager {user.manager.email} for user {user.email} is not synced to Azure AD yet. Skipping manager assignment.")
         
         success, result = self._make_graph_request("POST", "users", azure_user_data)
         
@@ -312,8 +316,16 @@ class AzureADService:
             update_data["officeLocation"] = user.office_location.strip()[:128]  # Azure AD limit
         
         # Add manager if available
-        if user.manager:
-            update_data["manager"] = user.manager.email  # Reference by UPN/email
+        if user.manager and user.manager.azure_ad_object_id:
+            # Use proper Microsoft Graph API format for manager reference
+            update_data["manager@odata.bind"] = f"https://graph.microsoft.com/v1.0/users/{user.manager.azure_ad_object_id}"
+            logger.info(f"Updating manager for {user.email}: {user.manager.email} (Azure ID: {user.manager.azure_ad_object_id})")
+        elif user.manager and not user.manager.azure_ad_object_id:
+            logger.warning(f"Manager {user.manager.email} for user {user.email} is not synced to Azure AD yet. Skipping manager assignment.")
+        elif user.manager is None:
+            # Remove manager reference if no manager is set
+            update_data["manager@odata.bind"] = None
+            logger.info(f"Removing manager for {user.email}")
         
         success, result = self._make_graph_request(
             "PATCH", 
