@@ -174,8 +174,8 @@ class AzureADService:
         }
         
         # Add job title if present and valid (1-128 characters)
-        if user.job_title and len(user.job_title.strip()) > 0:
-            job_title = user.job_title.strip()
+        if user.job_title and hasattr(user.job_title, 'title') and len(user.job_title.title.strip()) > 0:
+            job_title = user.job_title.title.strip()
             if len(job_title) <= 128:
                 azure_user_data["jobTitle"] = job_title
             else:
@@ -273,8 +273,8 @@ class AzureADService:
         }
         
         # Add job title if present and valid (1-128 characters)
-        if user.job_title and len(user.job_title.strip()) > 0:
-            job_title = user.job_title.strip()
+        if user.job_title and hasattr(user.job_title, 'title') and len(user.job_title.title.strip()) > 0:
+            job_title = user.job_title.title.strip()
             if len(job_title) <= 128:
                 update_data["jobTitle"] = job_title
             else:

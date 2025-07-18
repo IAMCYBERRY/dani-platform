@@ -14,6 +14,7 @@ pytest-django==4.5.2
 pytest==7.4.3
 factory-boy==3.3.0
 coverage==7.3.2
+python-magic==0.4.27
 
 # Microsoft Graph API Integration
 msgraph-core==0.2.2

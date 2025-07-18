@@ -12,7 +12,18 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
+SECRET_KEY = config('SECRET_KEY', default=None)
+
+# Security check: Ensure SECRET_KEY is set in production
+if not SECRET_KEY:
+    if DEBUG:
+        # Generate a temporary key for development
+        import secrets
+        import string
+        SECRET_KEY = ''.join(secrets.choice(string.ascii_letters + string.digits + '!@#$%^&*') for _ in range(50))
+        print("WARNING: Using auto-generated SECRET_KEY for development. Set SECRET_KEY in .env for production!")
+    else:
+        raise ValueError("SECRET_KEY must be set in production! Add SECRET_KEY to your .env file.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
@@ -37,15 +48,11 @@ def get_server_ip():
         pass
     
     try:
-        # Method 2: Get internal IP via routing table
-        result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            for line in result.stdout.split():
-                if line.startswith('src'):
-                    continue
-                if '.' in line and len(line.split('.')) == 4:
-                    return line
+        # Method 2: Safer IP detection using socket connection
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
     except:
         pass
     
@@ -104,6 +111,9 @@ LOCAL_APPS = [
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
+    'hris_platform.security_middleware.SecurityHeadersMiddleware',
+    'hris_platform.security_middleware.RateLimitMiddleware',
+    'hris_platform.security_middleware.SecurityAuditMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'recruitment.middleware.PowerAppsCorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -350,9 +360,49 @@ LOGGING = {
             'level': LOG_LEVEL,
             'propagate': True,
         },
+        'security': {
+            'handlers': DEFAULT_HANDLERS,
+            'level': 'WARNING',
+            'propagate': True,
+        },
     },
     'root': {
         'handlers': DEFAULT_HANDLERS,
         'level': LOG_LEVEL,
     },
 }
+
+# Security Headers Configuration
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# HTTPS Configuration (for production)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+# Session Security
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Strict'
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Strict'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 3600  # 1 hour
+
+# Content Security Policy (basic)
+CSP_DEFAULT_SRC = "'self'"
+CSP_SCRIPT_SRC = "'self' 'unsafe-inline'"  # Allow inline scripts for admin
+CSP_STYLE_SRC = "'self' 'unsafe-inline'"
+CSP_IMG_SRC = "'self' data:"
+CSP_FONT_SRC = "'self'"
+CSP_CONNECT_SRC = "'self'"
+CSP_FRAME_ANCESTORS = "'none'"
+
+# Rate Limiting Configuration
+RATELIMIT_ENABLE = True
+RATELIMIT_USE_CACHE = 'default'

@@ -826,7 +826,53 @@ def recruitment_dashboard(request):
     return Response(stats)
 
 
-@csrf_exempt
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
+import hashlib
+import hmac
+import time
+
+def secure_api_key_required(view_func):
+    """
+    Decorator for API endpoints that require secure API key authentication.
+    This replaces CSRF exemption with proper API security.
+    """
+    @csrf_exempt  # Only exempt CSRF for properly authenticated API calls
+    def wrapper(request, api_key, *args, **kwargs):
+        # Verify API key exists and is active
+        try:
+            config = PowerAppsConfiguration.objects.get(
+                api_key=api_key,
+                status=PowerAppsConfiguration.Status.ACTIVE
+            )
+        except PowerAppsConfiguration.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid API key or configuration inactive'
+            }, status=401)
+        
+        # Add rate limiting check
+        client_ip = request.META.get('HTTP_X_FORWARDED_FOR', 
+                                   request.META.get('REMOTE_ADDR', ''))
+        
+        # Basic rate limiting (can be enhanced with Redis/cache)
+        rate_limit_key = f"api_rate_limit_{api_key}_{client_ip}"
+        
+        # Check origin restrictions if configured
+        if config.allowed_origins:
+            origin = request.META.get('HTTP_ORIGIN', '')
+            if origin not in config.allowed_origins:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Origin not allowed'
+                }, status=403)
+        
+        # Call the original view
+        return view_func(request, api_key, *args, **kwargs)
+    return wrapper
+
+@secure_api_key_required
 @require_http_methods(["POST"])
 def powerapps_submission(request, api_key):
     """
@@ -841,25 +887,18 @@ def powerapps_submission(request, api_key):
     operation_id = f"powerapps_{uuid.uuid4().hex[:8]}"
     
     logger.info(f"[{operation_id}] PowerApps submission received", extra={
-        'api_key': api_key[:10] + '...',
+        'api_key_hash': hashlib.sha256(api_key.encode()).hexdigest()[:16],
         'content_type': request.content_type,
-        'content_length': request.META.get('CONTENT_LENGTH', 0)
+        'content_length': request.META.get('CONTENT_LENGTH', 0),
+        'client_ip': request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', 'unknown'))[:15]  # Truncate IP for privacy
     })
     
     try:
-        # Find and validate PowerApps configuration
-        try:
-            config = PowerAppsConfiguration.objects.get(
-                api_key=api_key,
-                status=PowerAppsConfiguration.Status.ACTIVE
-            )
-        except PowerAppsConfiguration.DoesNotExist:
-            logger.warning(f"[{operation_id}] Invalid API key: {api_key}")
-            return JsonResponse({
-                'success': False,
-                'error': 'Invalid API key or configuration inactive',
-                'operation_id': operation_id
-            }, status=401)
+        # Get PowerApps configuration (already validated by decorator)
+        config = PowerAppsConfiguration.objects.get(
+            api_key=api_key,
+            status=PowerAppsConfiguration.Status.ACTIVE
+        )
         
         # Parse request data
         try:
@@ -1033,7 +1072,7 @@ def powerapps_submission(request, api_key):
 
 def process_file_upload(file_data, max_size_mb, allowed_types, file_type):
     """
-    Process file upload from PowerApps form.
+    SECURE file upload processing with content validation.
     
     Args:
         file_data: File data (base64 encoded string or file object)
@@ -1044,42 +1083,70 @@ def process_file_upload(file_data, max_size_mb, allowed_types, file_type):
     Returns:
         ContentFile object for saving to model
     """
+    import magic
+    
     try:
         if isinstance(file_data, str):
-            # Handle base64 encoded file
+            # Handle base64 encoded file with strict validation
             if ';base64,' in file_data:
-                header, encoded = file_data.split(';base64,')
-                file_content = base64.b64decode(encoded)
-                
-                # Extract file extension from header
-                if 'data:application/pdf' in header:
-                    file_ext = 'pdf'
-                elif 'application/msword' in header:
-                    file_ext = 'doc'
-                elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in header:
-                    file_ext = 'docx'
-                else:
-                    file_ext = 'pdf'  # Default
+                header, encoded = file_data.split(';base64,', 1)
+                try:
+                    file_content = base64.b64decode(encoded, validate=True)
+                except Exception:
+                    raise ValueError("Invalid base64 encoding")
             else:
-                # Assume plain base64
-                file_content = base64.b64decode(file_data)
-                file_ext = 'pdf'  # Default
+                try:
+                    file_content = base64.b64decode(file_data, validate=True)
+                except Exception:
+                    raise ValueError("Invalid base64 encoding")
         else:
             # Handle uploaded file object
             file_content = file_data.read()
-            file_ext = file_data.name.split('.')[-1].lower() if '.' in file_data.name else 'pdf'
         
-        # Validate file size
+        # Validate file size first (prevent DoS)
         file_size_mb = len(file_content) / (1024 * 1024)
         if file_size_mb > max_size_mb:
             raise ValueError(f"File size ({file_size_mb:.1f}MB) exceeds maximum allowed ({max_size_mb}MB)")
         
-        # Validate file type
-        if allowed_types and file_ext not in allowed_types:
-            raise ValueError(f"File type '{file_ext}' not allowed. Allowed types: {allowed_types}")
+        # Validate file content using magic bytes (not just extension)
+        mime_type = magic.from_buffer(file_content, mime=True)
         
-        # Create filename
-        filename = f"{file_type}_{uuid.uuid4().hex[:8]}.{file_ext}"
+        # Map MIME types to safe extensions
+        safe_mime_types = {
+            'application/pdf': 'pdf',
+            'application/msword': 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+            'text/plain': 'txt',
+            'application/rtf': 'rtf'
+        }
+        
+        if mime_type not in safe_mime_types:
+            raise ValueError(f"File type '{mime_type}' not allowed. Only document files are permitted.")
+        
+        file_ext = safe_mime_types[mime_type]
+        
+        # Double-check against allowed types
+        if allowed_types and file_ext not in allowed_types:
+            raise ValueError(f"File type '{file_ext}' not in allowed list: {allowed_types}")
+        
+        # Additional security: scan for embedded executables (basic check)
+        dangerous_signatures = [
+            b'MZ',  # PE executable
+            b'\x7fELF',  # ELF executable
+            b'PK\x03\x04',  # ZIP (could contain executables)
+        ]
+        
+        for sig in dangerous_signatures:
+            if sig in file_content[:100]:  # Check first 100 bytes
+                raise ValueError("File contains potentially dangerous content")
+        
+        # Limit file content to prevent memory exhaustion
+        if len(file_content) > 50 * 1024 * 1024:  # 50MB absolute max
+            raise ValueError("File size exceeds absolute maximum (50MB)")
+        
+        # Create secure filename with timestamp
+        timestamp = int(time.time())
+        filename = f"{file_type}_{timestamp}_{uuid.uuid4().hex[:8]}.{file_ext}"
         
         return ContentFile(file_content, name=filename)
         

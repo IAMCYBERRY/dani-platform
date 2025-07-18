@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Role Management - DANI HRIS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #1a202c;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            color: #718096;
+            font-size: 16px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            color: #4299e1;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .stat-card p {
+            color: #718096;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .role-admin { background: #fed7d7; color: #c53030; }
+        .role-hr_manager { background: #c6f6d5; color: #2f855a; }
+        .role-hiring_manager { background: #bee3f8; color: #2b6cb0; }
+        .role-employee { background: #e2e8f0; color: #4a5568; }
+        .role-candidate { background: #fbb6ce; color: #b83280; }
+        
+        .users-table-container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            background: #f7fafc;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .table-header h2 {
+            color: #1a202c;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .users-table th,
+        .users-table td {
+            padding: 12px 20px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .users-table th {
+            background: #f7fafc;
+            color: #4a5568;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .users-table tr:hover {
+            background: #f7fafc;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            background: #4299e1;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .user-details h4 {
+            color: #1a202c;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        
+        .user-details p {
+            color: #718096;
+            font-size: 12px;
+        }
+        
+        .role-select {
+            padding: 6px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            background: #fff;
+            color: #2d3748;
+            font-size: 14px;
+            min-width: 140px;
+        }
+        
+        .role-select:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #3182ce;
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        
+        .alert-success {
+            background: #c6f6d5;
+            color: #2f855a;
+            border: 1px solid #9ae6b4;
+        }
+        
+        .alert-error {
+            background: #fed7d7;
+            color: #c53030;
+            border: 1px solid #feb2b2;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-active { background: #48bb78; }
+        .status-inactive { background: #e2e8f0; }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .users-table-container {
+                overflow-x: auto;
+            }
+            
+            .users-table {
+                min-width: 600px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🔐 Role Management</h1>
+                    <p>Manage user roles and permissions across the DANI platform</p>
+                </div>
+                <a href="/admin/" class="btn btn-secondary">← Back to Admin</a>
+            </div>
+        </div>
+        
+        <!-- Role Statistics -->
+        <div class="stats-grid">
+            {% for role_key, role_data in role_stats.items %}
+            <div class="stat-card">
+                <h3>{{ role_data.count }}</h3>
+                <p>{{ role_data.name }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Users Table -->
+        <div class="users-table-container">
+            <div class="table-header">
+                <h2>User Role Management</h2>
+            </div>
+            
+            <!-- Alert Messages -->
+            <div id="alert-container"></div>
+            
+            <!-- CSRF Token for AJAX requests -->
+            {% csrf_token %}
+            
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Current Role</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr data-user-id="{{ user.id }}">
+                        <td>
+                            <div class="user-info">
+                                <div class="user-avatar">
+                                    {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+                                </div>
+                                <div class="user-details">
+                                    <h4>{{ user.first_name }} {{ user.last_name }}</h4>
+                                    {% if user.employee_profile %}
+                                    <p>{{ user.employee_profile.department.name|default:"No Department" }}</p>
+                                    {% else %}
+                                    <p>No Department</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            <span class="role-badge role-{{ user.role }}">
+                                {{ user.get_role_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-indicator status-{% if user.is_active %}active{% else %}inactive{% endif %}"></span>
+                            {% if user.is_active %}Active{% else %}Inactive{% endif %}
+                        </td>
+                        <td>{{ user.date_joined|date:"M d, Y" }}</td>
+                        <td>
+                            <div class="actions">
+                                <select class="role-select" data-user-id="{{ user.id }}" data-current-role="{{ user.role }}">
+                                    {% for role_choice in role_choices %}
+                                    <option value="{{ role_choice.0 }}" {% if user.role == role_choice.0 %}selected{% endif %}>
+                                        {{ role_choice.1 }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button class="btn btn-primary update-role-btn" data-user-id="{{ user.id }}">
+                                    Update
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: #718096;">
+                            No users found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Role update functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const updateButtons = document.querySelectorAll('.update-role-btn');
+            const alertContainer = document.getElementById('alert-container');
+            
+            function showAlert(message, type = 'success') {
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.textContent = message;
+                
+                alertContainer.innerHTML = '';
+                alertContainer.appendChild(alert);
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    alert.remove();
+                }, 5000);
+            }
+            
+            function updateRole(userId, newRole, button) {
+                const row = button.closest('tr');
+                const select = row.querySelector('.role-select');
+                const originalRole = select.dataset.currentRole;
+                
+                // Show loading state
+                button.disabled = true;
+                button.textContent = 'Updating...';
+                row.classList.add('loading');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('user_id', userId);
+                formData.append('new_role', newRole);
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                                 getCookie('csrftoken');
+                
+                if (csrfToken) {
+                    formData.append('csrfmiddlewaretoken', csrfToken);
+                }
+                
+                fetch(window.location.pathname, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        
+                        // Update the role badge
+                        const roleBadge = row.querySelector('.role-badge');
+                        roleBadge.className = `role-badge role-${newRole}`;
+                        roleBadge.textContent = select.options[select.selectedIndex].text;
+                        
+                        // Update the current role data
+                        select.dataset.currentRole = newRole;
+                        
+                        // Update statistics (simple approach - could be more sophisticated)
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                        
+                    } else {
+                        showAlert(data.error || 'Failed to update role', 'error');
+                        // Reset select to original value
+                        select.value = originalRole;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred while updating the role', 'error');
+                    // Reset select to original value
+                    select.value = originalRole;
+                })
+                .finally(() => {
+                    // Reset button state
+                    button.disabled = false;
+                    button.textContent = 'Update';
+                    row.classList.remove('loading');
+                });
+            }
+            
+            // Add click handlers to update buttons
+            updateButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.dataset.userId;
+                    const row = this.closest('tr');
+                    const select = row.querySelector('.role-select');
+                    const newRole = select.value;
+                    const currentRole = select.dataset.currentRole;
+                    
+                    if (newRole === currentRole) {
+                        showAlert('No changes to save', 'error');
+                        return;
+                    }
+                    
+                    // Confirm role change for sensitive roles
+                    if (currentRole === 'admin' || newRole === 'admin') {
+                        const userName = row.querySelector('.user-details h4').textContent;
+                        const roleNames = {
+                            'admin': 'Administrator',
+                            'hr_manager': 'HR Manager',
+                            'hiring_manager': 'Hiring Manager',
+                            'employee': 'Employee',
+                            'candidate': 'Candidate'
+                        };
+                        
+                        const message = `Are you sure you want to change ${userName}'s role from ${roleNames[currentRole]} to ${roleNames[newRole]}?`;
+                        
+                        if (!confirm(message)) {
+                            select.value = currentRole;
+                            return;
+                        }
+                    }
+                    
+                    updateRole(userId, newRole, this);
+                });
+            });
+            
+            // Helper function to get CSRF token from cookies
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        });
+    </script>
+</body>
+</html>
