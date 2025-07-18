@@ -11,6 +11,78 @@ from django.core.validators import RegexValidator, EmailValidator
 from accounts.models import User
 
 
+class JobTitle(models.Model):
+    """
+    Job title model for standardized position management.
+    """
+    title = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, help_text='Job description and responsibilities')
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job_titles',
+        help_text='Primary department for this job title'
+    )
+    level = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Job level (e.g., Entry, Mid, Senior, Lead, Manager)'
+    )
+    min_salary = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Minimum salary range for this position'
+    )
+    max_salary = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Maximum salary range for this position'
+    )
+    required_skills = models.TextField(
+        blank=True,
+        help_text='Comma-separated list of required skills'
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'job_titles'
+        verbose_name = 'Job Title'
+        verbose_name_plural = 'Job Titles'
+        indexes = [
+            models.Index(fields=['title']),
+            models.Index(fields=['department', 'is_active']),
+            models.Index(fields=['level']),
+        ]
+        ordering = ['title']
+    
+    def __str__(self):
+        return self.title
+    
+    @property
+    def employee_count(self):
+        """Return the number of employees with this job title."""
+        return self.employees.filter(is_active=True).count()
+    
+    @property
+    def salary_range_display(self):
+        """Display salary range as a formatted string."""
+        if self.min_salary and self.max_salary:
+            return f"${self.min_salary:,.0f} - ${self.max_salary:,.0f}"
+        elif self.min_salary:
+            return f"${self.min_salary:,.0f}+"
+        elif self.max_salary:
+            return f"Up to ${self.max_salary:,.0f}"
+        return "Not specified"
+
+
 class Department(models.Model):
     """
     Department model for organizational structure.
@@ -104,7 +176,15 @@ class EmployeeProfile(models.Model):
         on_delete=models.PROTECT,
         related_name='employees'
     )
-    job_title = models.CharField(max_length=100)
+    job_title = models.ForeignKey(
+        JobTitle,
+        on_delete=models.PROTECT,
+        related_name='employees',
+        null=True,
+        blank=True,
+        help_text='Employee job title/position'
+    )
+    job_title_old = models.CharField(max_length=100, blank=True, null=True, help_text='Temporary field for migration')
     manager = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

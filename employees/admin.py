@@ -3,7 +3,36 @@ Django admin configuration for employees app.
 """
 
 from django.contrib import admin
-from .models import Department, EmployeeProfile, PerformanceReview, TimeOffRequest
+from .models import JobTitle, Department, EmployeeProfile, PerformanceReview, TimeOffRequest
+
+
+@admin.register(JobTitle)
+class JobTitleAdmin(admin.ModelAdmin):
+    list_display = ['title', 'department', 'level', 'salary_range_display', 'employee_count', 'is_active']
+    list_filter = ['is_active', 'department', 'level']
+    search_fields = ['title', 'description', 'required_skills']
+    readonly_fields = ['employee_count', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('title', 'description', 'is_active')
+        }),
+        ('Organization', {
+            'fields': ('department', 'level')
+        }),
+        ('Compensation', {
+            'fields': ('min_salary', 'max_salary'),
+            'classes': ('collapse',)
+        }),
+        ('Requirements', {
+            'fields': ('required_skills',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('employee_count', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(Department)

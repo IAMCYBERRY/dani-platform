@@ -81,7 +81,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         related_name='users'
     )
-    job_title = models.CharField(max_length=100, blank=True)
+    job_title = models.ForeignKey(
+        'employees.JobTitle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        help_text='User job title/position'
+    )
+    job_title_old = models.CharField(max_length=100, blank=True, null=True, help_text='Temporary field for migration')
     
     # Additional employee information for Azure AD sync
     company_name = models.CharField(max_length=100, blank=True, help_text='Company or organization name')

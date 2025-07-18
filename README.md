@@ -8,6 +8,7 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
 - **User Management**: Role-based access control (Admin, HR Manager, Hiring Manager, Employee, Candidate)
 - **Employee Profiles**: Comprehensive employee data management
 - **Department Management**: Organizational structure and hierarchy
+- **Job Titles Management**: Standardized job title system with salary ranges and skill requirements
 - **Performance Reviews**: Employee evaluation and feedback system
 - **Time-off Management**: Leave request and approval workflow
 - **Azure AD Integration**: Seamless sync with Microsoft Entra/Azure AD
@@ -89,6 +90,7 @@ A comprehensive self-hosted Human Resources Information System (HRIS) and Applic
 ✅ Complete D.A.N.I platform (HRIS + ATS)  
 ✅ Role-based user management  
 ✅ Employee profiles and departments  
+✅ Standardized job titles with salary ranges  
 ✅ Job postings and applicant tracking  
 ✅ Interview scheduling  
 ✅ Performance reviews  
@@ -597,6 +599,73 @@ make health         # Check service health
 
 ---
 
+## 💼 Job Titles Management
+
+### Overview
+D.A.N.I includes a comprehensive job title management system that standardizes position information across your organization. This replaces free-text job title entry with a centralized, dropdown-based system.
+
+### Features
+- **Centralized Management**: Create and manage all job titles from one location
+- **Salary Ranges**: Define minimum and maximum salary ranges for each position
+- **Skill Requirements**: Document required skills for each role
+- **Department Association**: Link job titles to specific departments
+- **Job Levels**: Categorize positions by level (Entry, Mid, Senior, Lead, Manager)
+- **Employee Tracking**: See how many employees have each job title
+
+### Accessing Job Titles Management
+1. **Login to Admin Interface**: http://your-server:8000/admin/
+2. **Navigate to**: Employee Management → Job Titles
+3. **Add/Edit**: Create new job titles or modify existing ones
+
+### Job Title Fields
+- **Title**: The official job title name (required, unique)
+- **Description**: Detailed job description and responsibilities
+- **Department**: Primary department for this position
+- **Level**: Job level categorization
+- **Salary Range**: Minimum and maximum salary (optional)
+- **Required Skills**: Comma-separated list of required skills
+- **Active Status**: Enable/disable job titles
+
+### Using Job Titles
+Once created, job titles automatically appear as dropdown options when:
+- Creating new users in the admin interface
+- Editing existing user profiles
+- Creating employee profiles
+- Importing user data
+
+### Migration from Text Fields
+When upgrading to the job title system, D.A.N.I automatically:
+- ✅ Preserves existing job title data
+- ✅ Creates JobTitle records from unique existing titles
+- ✅ Links users to appropriate JobTitle records
+- ✅ Maintains data integrity throughout the process
+
+### API Endpoints
+```bash
+# List all job titles
+GET /api/employees/job-titles/
+
+# Create new job title
+POST /api/employees/job-titles/
+{
+  "title": "Senior Software Engineer",
+  "description": "Lead development of complex software systems",
+  "department": 1,
+  "level": "Senior",
+  "min_salary": 90000,
+  "max_salary": 120000,
+  "required_skills": "Python, Django, PostgreSQL, Docker"
+}
+
+# Update job title
+PUT /api/employees/job-titles/{id}/
+
+# Get job title details
+GET /api/employees/job-titles/{id}/
+```
+
+---
+
 ## 🔒 Security Considerations
 
 ### Essential Security Steps
@@ -675,6 +744,8 @@ POST   /api/accounts/password/change/    # Change password
 ```
 GET    /api/employees/departments/       # List departments
 POST   /api/employees/departments/       # Create department
+GET    /api/employees/job-titles/        # List job titles
+POST   /api/employees/job-titles/        # Create job title
 GET    /api/employees/profiles/          # List employee profiles
 POST   /api/employees/profiles/          # Create employee profile
 GET    /api/employees/performance-reviews/ # List performance reviews
@@ -747,6 +818,9 @@ hris_platform/
 │   ├── tasks.py             # Celery tasks for background sync
 │   └── admin.py             # Admin interface with sync actions
 ├── employees/               # HRIS functionality
+│   ├── models.py            # Employee, Department, JobTitle models
+│   ├── admin.py             # Job Titles, Employee Profiles management
+│   └── views.py             # Employee management API endpoints
 ├── recruitment/             # ATS functionality
 ├── hris_platform/           # Main Django project
 ├── media/                   # User uploads
@@ -795,6 +869,7 @@ For support and questions:
 - [x] Microsoft Sentinel security monitoring
 - [x] Comprehensive backup system
 - [x] Production deployment guide
+- [x] Standardized Job Titles management system
 - [ ] Single Sign-On (SSO) support
 - [ ] Advanced reporting dashboard
 - [ ] Email notifications
